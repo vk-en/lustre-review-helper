@@ -1,0 +1,336 @@
+{
+  "name": "lustre-review-helper",
+  "displayName": "Lustre Review Helper",
+  "description": "%extension.description%",
+  "version": "0.1.0",
+  "publisher": "vk-en",
+  "license": "BSD-2-Clause",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#121a2e",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vk-en/lustre-review-helper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vk-en/lustre-review-helper/issues"
+  },
+  "homepage": "https://github.com/vk-en/lustre-review-helper#readme",
+  "engines": {
+    "vscode": "^1.96.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "lustre",
+    "gerrit",
+    "code review",
+    "ai review",
+    "patch review",
+    "lreview",
+    "codex",
+    "claude",
+    "claude code",
+    "augment",
+    "auggie",
+    "mcp"
+  ],
+  "main": "./src/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "%capabilities.untrusted%"
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "scripts": {
+    "test": "node scripts/test.js",
+    "build": "node scripts/build.js",
+    "release": "node scripts/release.js"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lustreReview",
+          "title": "Lustre Review Helper",
+          "icon": "media/review.svg"
+        }
+      ]
+    },
+    "views": {
+      "lustreReview": [
+        {
+          "id": "lustreReview.review",
+          "name": "Lustre Review Helper",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "lustreReview.refresh",
+        "title": "%command.refresh%",
+        "category": "Lustre Review Helper",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "lustreReview.repository",
+        "title": "%command.repository%",
+        "category": "Lustre Review Helper",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "lustreReview.selectAll",
+        "title": "%command.selectAll%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.clearSelection",
+        "title": "%command.clearSelection%",
+        "category": "Lustre Review Helper",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "lustreReview.toggleMerged",
+        "title": "%command.toggleMerged%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.model",
+        "title": "%command.model%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.run",
+        "title": "%command.run%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.mcpConfig",
+        "title": "%command.mcpConfig%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.logs",
+        "title": "%command.logs%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.settings",
+        "title": "%command.settings%",
+        "category": "Lustre Review Helper",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "lustreReview.version",
+        "title": "v0.1.0"
+      },
+      {
+        "command": "lustreReview.reports",
+        "title": "%command.reports%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.augmentSetup",
+        "title": "%command.augmentSetup%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.connectCodex",
+        "title": "%command.connectCodex%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.connectClaude",
+        "title": "%command.connectClaude%",
+        "category": "Lustre Review Helper"
+      },
+      {
+        "command": "lustreReview.connectAuggie",
+        "title": "%command.connectAuggie%",
+        "category": "Lustre Review Helper"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "lustreReview.version",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "lustreReview.version",
+          "when": "view == lustreReview.review",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lustreReview.settings",
+          "when": "view == lustreReview.review",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Lustre Review Helper",
+      "properties": {
+        "lustreReview.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "de",
+            "es",
+            "ja",
+            "zh-cn",
+            "ru"
+          ],
+          "enumItemLabels": [
+            "%config.language.auto%",
+            "English",
+            "Deutsch",
+            "Español",
+            "日本語",
+            "简体中文",
+            "Русский"
+          ],
+          "enumDescriptions": [
+            "%config.language.autoDescription%",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "default": "auto",
+          "scope": "application",
+          "description": "%config.language%"
+        },
+        "lustreReview.gerritPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.gerritPath%"
+        },
+        "lustreReview.gerritBotName": {
+          "type": "string",
+          "default": "",
+          "maxLength": 80,
+          "pattern": "^[^\\x00-\\x1f\\x7f\\[\\]<>]*$",
+          "scope": "application",
+          "description": "%config.gerritBotName%"
+        },
+        "lustreReview.gerritSignatureDetails": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "%config.gerritSignatureDetails%"
+        },
+        "lustreReview.gerritDashboardPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.gerritDashboardPath%"
+        },
+        "lustreReview.gerritPatchesLayout": {
+          "type": "string",
+          "enum": [
+            "list",
+            "cards",
+            "groups"
+          ],
+          "enumDescriptions": [
+            "%config.gerritPatchesLayout.list%",
+            "%config.gerritPatchesLayout.cards%",
+            "%config.gerritPatchesLayout.groups%"
+          ],
+          "default": "list",
+          "scope": "application",
+          "description": "%config.gerritPatchesLayout%"
+        },
+        "lustreReview.lreviewPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.lreviewPath%"
+        },
+        "lustreReview.codexPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.codexPath%"
+        },
+        "lustreReview.promptsDir": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.promptsDir%"
+        },
+        "lustreReview.commitLimit": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "%config.commitLimit%"
+        },
+        "lustreReview.jobs": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%config.jobs%"
+        },
+        "lustreReview.timeout": {
+          "type": "integer",
+          "default": 7200,
+          "minimum": 60,
+          "maximum": 28800,
+          "description": "%config.timeout%"
+        },
+        "lustreReview.mode": {
+          "type": "string",
+          "enum": [
+            "full",
+            "light"
+          ],
+          "default": "full",
+          "description": "%config.mode%"
+        },
+        "lustreReview.claudePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.claudePath%"
+        },
+        "lustreReview.auggiePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.auggiePath%"
+        }
+      }
+    }
+  }
+}

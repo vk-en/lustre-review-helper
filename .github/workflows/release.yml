@@ -1,0 +1,37 @@
+name: Release
+
+# Pushing a vX.Y.Z tag, as scripts/release.js makes it, releases that version.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Without this secret the release goes to GitHub only.
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm test
+      - run: npm run build
+      - name: GitHub release with the .vsix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/release.js --notes "${GITHUB_REF_NAME#v}" > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/*.vsix --title "Lustre Review Helper ${GITHUB_REF_NAME#v}" --notes-file notes.md
+      - name: Publish to the Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx vsce publish --packagePath dist/*.vsix

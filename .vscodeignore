@@ -1,0 +1,11 @@
+test/**
+node_modules/**
+package-lock.json
+*.vsix
+.gitignore
+.tools/**
+docs/**
+scripts/**
+dist/**
+.github/**
+CONTRIBUTING.md
