@@ -27,6 +27,8 @@
   `notes` in MCP review lookups.
 - Add Gerrit changes and look up reviews through MCP using project links
   that omit `/c/`. Adding a link to a specific patchset selects that patchset.
+- History and MCP now mark a review as complete after saving its results.
+  Clients can start the next review as soon as they see that status.
 
 ## 0.1.0
 

@@ -378,7 +378,7 @@ class ReviewService extends EventEmitter {
       };
       let finish;
       const done = new Promise(resolve => { finish = resolve; });
-      const active = { child: undefined, done };
+      const active = { child: undefined, done, finishing: false };
       this.children.set(id, active);
       const telemetry = new LiveUsage(run, { claudeMetrics: metrics });
       let sampling;
@@ -445,9 +445,14 @@ class ReviewService extends EventEmitter {
           await sampling;
           await sample(true);
           await metrics?.dispose();
-          run.status = run.status === 'cancelling' ? 'cancelled' : finalStatus;
-          run.finishedAt = new Date().toISOString();
-          await this.persist(run).catch(error => { run.error = `Cannot save review: ${error.message}`; });
+          // Polling clients can start another review as soon as they see a terminal status.
+          active.finishing = true;
+          const completion = {
+            status: run.status === 'cancelling' ? 'cancelled' : finalStatus,
+            finishedAt: new Date().toISOString(),
+          };
+          await this.persist({ ...run, ...completion }).catch(error => { run.error = `Cannot save review: ${error.message}`; });
+          Object.assign(run, completion);
           this.children.delete(id);
           this.emit('changed', id);
           this.emit('finished', id);
@@ -474,7 +479,8 @@ class ReviewService extends EventEmitter {
     const run = this.runs.get(id);
     this.get(id);
     const active = this.children.get(id);
-    if (active && ACTIVE.has(run.status)) {
+    if (active?.finishing) await active.done;
+    else if (active && ACTIVE.has(run.status)) {
       run.status = 'cancelling';
       // lreview handles SIGINT by terminating its agent process groups and
       // persisting partial results. SIGTERM would leave those groups alive.
@@ -566,7 +572,7 @@ class ReviewService extends EventEmitter {
     // Repositories may already have been removed from VS Code at shutdown.
     for (const [id, process] of active) {
       const run = this.runs.get(id);
-      if (ACTIVE.has(run.status)) {
+      if (!process.finishing && ACTIVE.has(run.status)) {
         run.status = 'cancelling';
         process.child?.kill('SIGINT');
       }

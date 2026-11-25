@@ -9,6 +9,9 @@ const { reports, summarize } = require('../src/history');
 const { repository, script, temporary, until } = require('./helpers');
 
 async function setup(t, scenario = 'findings') {
+  let service;
+  // Cleanup hooks run in registration order. Stop the service before removing its storage.
+  t.after(() => service?.dispose());
   const repo = await repository(t);
   repo.git('remote', 'add', 'origin', 'https://review.whamcloud.com/fs/lustre-release');
   const first = await repo.commit('old\n', 'LU-1: old');
@@ -52,12 +55,11 @@ async function setup(t, scenario = 'findings') {
       console.log('finished');
     }
   `);
-  const service = new ReviewService({ storage: path.join(repo.directory, 'runs'),
+  service = new ReviewService({ storage: path.join(repo.directory, 'runs'),
     settings: async () => ({ lreview: binary, codex: process.execPath, mode: 'full', jobs: 2, timeout: 60 }),
     discoverModels: async () => [{ id: 'test-model', name: 'Test', isDefault: true, efforts: ['medium'] }] });
   await service.initialize();
   service.setRepositories([repo.directory]);
-  t.after(() => service.dispose());
   return { repo, first, second, service };
 }
 
@@ -108,6 +110,39 @@ test('selected commits are pinned, run with real argv, and returned to both clie
   assert.equal(invocation.env.LREVIEW_EFFORT, 'medium');
   assert.equal(service.history()[0].status, 'completed');
   assert.equal(JSON.parse(await fs.readFile(path.join(result.directory, 'run.json'))).status, 'completed');
+});
+
+test('a review stays active until its final run.json is in place', async t => {
+  const { service } = await setup(t);
+  const run = await service.start({ commits: ['HEAD'] });
+  const file = path.join(run.directory, 'run.json');
+  let renaming = false, allowRename;
+  const gate = new Promise(resolve => { allowRename = resolve; });
+  const rename = fs.rename;
+  t.mock.method(fs, 'rename', async (from, to) => {
+    if (to === file) {
+      renaming = true;
+      await gate;
+    }
+    return rename(from, to);
+  });
+
+  let cancellation, shutdown;
+  try {
+    await until(() => renaming);
+    assert.equal(JSON.parse(await fs.readFile(file, 'utf8')).status, 'running');
+    assert.equal(service.get(run.id).status, 'running');
+    cancellation = service.cancel(run.id);
+    shutdown = service.dispose();
+    assert.equal(service.history()[0].status, 'running');
+  } finally { allowRename(); }
+
+  const result = await cancellation;
+  await shutdown;
+  const saved = JSON.parse(await fs.readFile(file, 'utf8'));
+  assert.equal(result.status, 'completed');
+  assert.equal(saved.status, result.status);
+  assert.equal(saved.finishedAt, result.finishedAt);
 });
 
 const remotePatch = {number:64086,patchset:2,project:'fs/lustre-release',url:'https://review.whamcloud.com/64086/2',subject:'LU-99: remote patch'};
