@@ -102,6 +102,7 @@ class ReviewDiff {
     this.vscode = vscode;
     this.sessions = new Map();
     this.threads = new Map();
+    this.discussionTargets = new WeakMap();
   }
 
   uri(key, side, file) {
@@ -209,7 +210,10 @@ class ReviewDiff {
           mode: vscode.CommentMode.Preview, author: { name: comment.author }, ...stamp(comment.updated) })));
       thread.label = `Gerrit · ${t('unresolved')}`;
       thread.canReply = false;
-      thread.contextValue = 'lustreReviewGerrit';
+      if (discussion.id) {
+        thread.contextValue = 'lustreReviewGerritThread';
+        this.discussionTargets.set(thread, { key, id: discussion.id });
+      } else thread.contextValue = 'lustreReviewGerrit';
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
       return thread;
     });

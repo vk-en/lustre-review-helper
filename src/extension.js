@@ -16,7 +16,7 @@ const { finished, title: reviewTitle, summarize, findings: findingCounts, report
 const { resultKey } = require('./review-targets');
 const { lreviewVersion, gitStatus: readGitStatus, GIT_URL } = require('./prerequisites');
 const { ReviewDiff, SCHEME: DIFF_SCHEME } = require('./review-diff');
-const { readComments, forPatchset } = require('./gerrit-comments');
+const { readComments, readThread, forPatchset } = require('./gerrit-comments');
 const { findReviews, reviewDetails, commitInfo } = require('./review-lookup');
 const { connectMcp, checkMcp } = require('./mcp-setup');
 const { GlobalStatistics } = require('./global-statistics');
@@ -784,6 +784,15 @@ async function activate(context) {
       author: run.signature || '[AI review]', scope: ['commented', 'all'].includes(scope) ? scope : diffScope, ...(only ? { only } : {}),
       title: `${t('Review')} · ${subject}${report.gerritPatch ? ` · PS ${report.gerritPatch.patchset}` : ''}` });
   }
+
+  command('openGerritThread', async thread => {
+    const target = reviewDiff.discussionTargets.get(thread);
+    const report = target && visibleReports().find(entry => entry.id === target.key);
+    if (!report?.gerritPatch) throw new Error(t('This Gerrit discussion is unavailable.'));
+    const run = service.get(report.runId), patch = report.gerritPatch;
+    const content = await readThread(await findGerritCli(), patch, target.id, run.repo);
+    await showSnapshot(`Gerrit-${patch.number}-PS${patch.patchset}-${target.id}.txt`, content);
+  });
 
   const connectionFile = path.join(storage, 'connection.json');
   const runtime = path.join(context.globalStorageUri.fsPath, 'mcp-runtime');

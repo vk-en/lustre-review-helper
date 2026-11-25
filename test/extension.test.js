@@ -41,8 +41,11 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
       else console.log(JSON.stringify({timeline:[{author:'Gerrit Author',updated:'2026-10-18 09:00:00.000000000',message:'Fixed, thanks.'}]}));process.exit(0);
     }
     if(process.argv[2]==='comments') {
+      if(process.argv.slice(3).join(' ')==='https://review.whamcloud.com/64086 --no-context --thread a1_b2') {
+        console.log(JSON.stringify({threads:[{root_comment:{id:'a1_b2',patch_set:2,file_path:'file.c',line:1,message:'Original'},replies:[{author:{name:'Owner'},message:'Fixed since the diff opened.'}],is_resolved:true}]}));process.exit(0);
+      }
       if(process.argv.slice(3).join(' ')!=='https://review.whamcloud.com/64086 --no-context'||process.env.GERRIT_URL!=='https://review.whamcloud.com')process.exit(4);
-      const comment=(patch_set,message)=>({patch_set,file_path:'file.c',line:1,message,author:{name:'Other Reviewer'},unresolved:true,updated:'2026-10-16 10:00:00.000000000'});
+      const comment=(patch_set,message)=>({id:'a1_b2',patch_set,file_path:'file.c',line:1,message,author:{name:'Other Reviewer'},unresolved:true,updated:'2026-10-16 10:00:00.000000000'});
       console.log(JSON.stringify({threads:[{root_comment:comment(2,'Please explain this line.'),replies:[]},{root_comment:comment(1,'From patchset 1.'),replies:[]}]}));process.exit(0);
     }
     if(process.argv.slice(2).join(' ')!=='check')process.exit(9);
@@ -148,6 +151,7 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
     setTimeout(()=>console.log('run complete'),1200);
   `);
   let document, configurationListener, updateTarget, workspaceLimit;
+  const textProviders = new Map();
   const noop = () => {};
   const disposable = () => ({ dispose: noop });
   const uri = file => ({ fsPath: file, scheme: 'file', toString: () => file });
@@ -168,7 +172,7 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
           settings[key] = value; updateTarget = target;
           configurationListener({ affectsConfiguration: section => section === 'lustreReview' || section === `lustreReview.${key}` });
         } }),
-      registerTextDocumentContentProvider: disposable, onDidCloseTextDocument: disposable,
+      registerTextDocumentContentProvider: (scheme, provider) => { textProviders.set(scheme, provider); return disposable(); }, onDidCloseTextDocument: disposable,
       onDidChangeWorkspaceFolders: disposable,
       onDidChangeConfiguration: cb => { configurationListener = cb; return disposable(); },
       openTextDocument: async options => (document = options) },
@@ -192,6 +196,7 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
     commands: { registerCommand: (id, fn) => { commands.set(id, fn); return disposable(); },
       executeCommand: async (id, ...args) => { focused=id; executed.push([id, ...args]); return commands.get(id)?.(...args); } },
     comments: { createCommentController: () => ({ createCommentThread: (uri, range, comments) => { const thread = { uri, range, comments, dispose() { this.disposed = true; } }; commentThreads.push(thread); return thread; }, dispose: noop }) },
+    Position: class { constructor(line, character) { Object.assign(this, { line, character }); } },
     Range: class { constructor(startLine) { this.startLine = startLine; } }, MarkdownString: class { constructor(value) { this.value = value; } },
     CommentMode: { Preview: 1 }, CommentThreadCollapsibleState: { Expanded: 1 },
     extensions: { getExtension: name => name === 'vscode.git' ? { activate: async () => ({ getAPI: () => gitApi }) } :
@@ -796,6 +801,12 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   assert.equal(gerritDiff[1],'Review · LU-12345: Gerrit patch · PS 2 · files with comments · 1 unresolved in Gerrit',
     'a clean review still shows the files under discussion in Gerrit');
   const discussion=commentThreads.filter(thread=>thread.label==='Gerrit · unresolved'&&!thread.disposed);
+  assert.equal(discussion[0].contextValue,'lustreReviewGerritThread');
+  await commands.get('lustreReview.openGerritThread')(discussion[0]);
+  const transcript = textProviders.get('lustre-review').provideTextDocumentContent(shown.at(-1).document);
+  assert.match(transcript,/PS 2 · Resolved/);
+  assert.match(transcript,/Owner\nFixed since the diff opened/);
+  assert.match(transcript,/\/64086\/comments\/a1_b2/);
   assert.deepEqual(discussion.map(thread=>[thread.uri.path,thread.range.startLine,thread.comments[0].author.name,thread.comments[0].body.value]),
     [['/file.c',0,'Other Reviewer','Please explain this line.']],'only the reviewed patchset’s unresolved discussion is shown');
   assert.deepEqual(gerritDiff[2].map(entry=>entry[0].path),['/file.c'],'the message has no comments, so only the discussed file is shown');

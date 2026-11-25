@@ -1,4 +1,7 @@
 {
+ "Invalid Gerrit thread ID.": "Gerrit のスレッド ID が無効です。",
+ "This Gerrit discussion is unavailable.": "この Gerrit スレッドは利用できません。",
+ "Resolved": "解決済み",
  "Cannot load Augment models. Sign in to Auggie in AI Settings.": "Augment のモデルを読み込めません。AI 設定から Auggie にサインインしてください。",
  "Auggie returned an invalid model catalog. Update Auggie CLI.": "Auggie が無効なモデルカタログを返しました。Auggie CLI を更新してください。",
  "Auggie returned no model catalog. Update Auggie CLI.": "Auggie がモデルカタログを返しませんでした。Auggie CLI を更新してください。",

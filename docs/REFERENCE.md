@@ -456,6 +456,9 @@ host. The existing lreview backend depends on POSIX process groups and
   discussions on the reviewed patchset, read with `gc comments` when the diff
   opens: each with all its replies, labelled **Gerrit · unresolved**,
   read-only, and moved like a finding when it sits on hidden unchanged code.
+  Choose **Open Gerrit discussion** in the thread header to fetch its current
+  replies and resolution by comment ID. The read-only tab includes the link
+  to the discussion in Gerrit.
   Threads started on other patchsets are left out, since their lines may have
   moved and owners do not always resolve them after a fix; copies of our own
   published findings are left out too. Gerrit is asked in parallel and never

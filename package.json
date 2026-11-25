@@ -89,6 +89,12 @@
     },
     "commands": [
       {
+        "command": "lustreReview.openGerritThread",
+        "title": "%command.openGerritThread%",
+        "category": "Lustre Review Helper",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "lustreReview.refresh",
         "title": "%command.refresh%",
         "category": "Lustre Review Helper",
@@ -173,7 +179,18 @@
       }
     ],
     "menus": {
+      "comments/commentThread/title": [
+        {
+          "command": "lustreReview.openGerritThread",
+          "when": "commentThread == lustreReviewGerritThread",
+          "group": "navigation"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "lustreReview.openGerritThread",
+          "when": "false"
+        },
         {
           "command": "lustreReview.version",
           "when": "false"

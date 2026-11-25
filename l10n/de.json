@@ -1,4 +1,7 @@
 {
+ "Invalid Gerrit thread ID.": "Ungültige Gerrit-Diskussions-ID.",
+ "This Gerrit discussion is unavailable.": "Diese Gerrit-Diskussion ist nicht verfügbar.",
+ "Resolved": "Erledigt",
  "Cannot load Augment models. Sign in to Auggie in AI Settings.": "Augment-Modelle konnten nicht geladen werden. Melden Sie sich in den KI-Einstellungen bei Auggie an.",
  "Auggie returned an invalid model catalog. Update Auggie CLI.": "Auggie hat einen ungültigen Modellkatalog geliefert. Aktualisieren Sie die Auggie CLI.",
  "Auggie returned no model catalog. Update Auggie CLI.": "Auggie hat keinen Modellkatalog geliefert. Aktualisieren Sie die Auggie CLI.",

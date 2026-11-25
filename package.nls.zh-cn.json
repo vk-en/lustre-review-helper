@@ -1,4 +1,5 @@
 {
+  "command.openGerritThread": "打开 Gerrit 讨论",
   "extension.description": "使用 Codex、Claude Code 或 Augment 审查 Lustre 提交，提供实时用量统计和 MCP 自我审查。",
   "capabilities.untrusted": "审查会在此工作区中运行已安装的 lreview 和所选代理的工具。",
   "command.refresh": "刷新提交",

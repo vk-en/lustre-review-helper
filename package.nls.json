@@ -1,4 +1,5 @@
 {
+  "command.openGerritThread": "Open Gerrit discussion",
   "extension.description": "Review Lustre commits with Codex, Claude Code, or Augment, with live usage statistics and MCP self-review.",
   "capabilities.untrusted": "Reviews execute the installed lreview and selected agent tools in this workspace.",
   "command.refresh": "Refresh Commits",

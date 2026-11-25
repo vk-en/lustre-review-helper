@@ -1,4 +1,5 @@
 {
+  "command.openGerritThread": "Открыть обсуждение Gerrit",
   "extension.description": "Обзор коммитов Lustre с помощью Codex, Claude Code или Augment, со статистикой использования в реальном времени и самопроверкой через MCP.",
   "capabilities.untrusted": "Обзоры запускают установленный lreview и выбранные инструменты агентов в этой рабочей области.",
   "command.refresh": "Обновить коммиты",

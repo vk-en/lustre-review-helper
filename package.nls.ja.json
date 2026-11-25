@@ -1,4 +1,5 @@
 {
+  "command.openGerritThread": "Gerrit のスレッドを開く",
   "extension.description": "Codex、Claude Code、Augment で Lustre のコミットをレビューします。使用状況のリアルタイム統計と MCP によるセルフレビューに対応。",
   "capabilities.untrusted": "レビューでは、このワークスペースでインストール済みの lreview と選択したエージェントのツールを実行します。",
   "command.refresh": "コミットを更新",
