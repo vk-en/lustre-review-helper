@@ -17,6 +17,7 @@ const { resultKey } = require('./review-targets');
 const { lreviewVersion, gitStatus: readGitStatus, GIT_URL } = require('./prerequisites');
 const { ReviewDiff, SCHEME: DIFF_SCHEME } = require('./review-diff');
 const { readComments, readThread, forPatchset } = require('./gerrit-comments');
+const { readConflicts } = require('./gerrit-conflicts');
 const { findReviews, reviewDetails, commitInfo } = require('./review-lookup');
 const { connectMcp, checkMcp } = require('./mcp-setup');
 const { GlobalStatistics } = require('./global-statistics');
@@ -170,6 +171,8 @@ async function activate(context) {
   let notice = '';
   let selectedRun;
   let selectedGerritRun;
+  let conflictScan, conflictRequest;
+  context.subscriptions.push({ dispose: () => conflictRequest?.abort() });
   // Reports & History opens on Local after a restart, with no review chosen.
   let historyTab = 'local';
   const SETTINGS_TABS = ['accounts', 'agent', 'utilities', 'mcp', 'other', 'language'];
@@ -575,6 +578,7 @@ async function activate(context) {
       return entry && entry.run !== report.runId ? { postedAt: entry.postedAt, signature: entry.signature } : undefined;
     };
     const forView = source => { const { log, ...run } = source; return { ...run, summary: summarize(run), hasReport: hasReport(run), isNew: isNew(run), gerritState: reportGerrit(run),
+      ...(conflictScan?.id === run.id ? { conflictScan } : {}),
       ...(run.gerritPatch ? { publication: publication.get(run.runId, run.reportSha), sharedPublication: shared(run), otherAiReviews: otherAiReviews(run.gerritPatch) } : {}) }; };
     const latest = service.runs.get(currentReview);
     const review = activeRun() || (latest?.repository === selectedRepository?.id ? latest : undefined);
@@ -795,6 +799,41 @@ async function activate(context) {
     const content = await readThread(await findGerritCli(), patch, target.id, run.repo);
     await showSnapshot(`Gerrit-${patch.number}-PS${patch.patchset}-${target.id}.txt`, content);
   });
+
+  async function checkPatchConflicts(id, other) {
+    const report = state().gerritRun;
+    if (!report?.gerritPatch || report.id !== id || historyTab !== 'gerrit') return;
+    const previous = conflictScan?.id === id ? conflictScan : undefined;
+    if (previous?.busy) return;
+    const pair = previous?.data?.rows.find(item => item.number === other && item.kind === 'merge');
+    if (other !== undefined && !pair) return;
+    conflictRequest?.abort();
+    const request = new AbortController();
+    conflictRequest = request;
+    const scan = { id, busy: true, data: previous?.data };
+    conflictScan = scan;
+    update();
+    try {
+      const patch = report.gerritPatch;
+      const { summary, hunks } = await readConflicts(await findGerritCli(), patch, report.repo, { other, signal: request.signal });
+      if (request.signal.aborted) return;
+      scan.data = summary;
+      if (!pair) return;
+      const fresh = summary.rows.find(item => item.number === other && item.kind === 'merge');
+      if (summary.tip !== previous.data.tip || summary.revision !== previous.data.revision || summary.ps !== previous.data.ps ||
+          !fresh || fresh.revision !== pair.revision || fresh.ps !== pair.ps) {
+        scan.error = t('The branch or patchsets changed. Select a conflict from the updated results.');
+      } else if (!hunks) {
+        scan.error = t('Gerrit CLI returned no text hunks for this pair.');
+      } else if (section === 'history' && historyTab === 'gerrit' && state().gerritRun?.id === id) {
+        await showSnapshot(`Gerrit-${patch.number}-PS${summary.ps}-${other}-PS${fresh.ps}.diff`, hunks);
+      }
+    } catch (error) {
+      if (!request.signal.aborted) scan.error = error.message;
+    } finally {
+      if (conflictRequest === request) { conflictRequest = undefined; scan.busy = false; if (!disposed) update(); }
+    }
+  }
 
   const connectionFile = path.join(storage, 'connection.json');
   const runtime = path.join(context.globalStorageUri.fsPath, 'mcp-runtime');
@@ -1177,6 +1216,8 @@ async function activate(context) {
           case 'openBatchReport': await openBatchReport(message.key); break;
           case 'gerritReports': await openReports(message.id || state().gerritRun?.id); break;
           case 'publishGerrit': await publishGerrit(message.id); break;
+          case 'checkConflicts': await checkPatchConflicts(message.id, message.other); break;
+          case 'cancelConflicts': if (conflictScan?.id === message.id) conflictRequest?.abort(); break;
           case 'autoOpenReports':
             if (typeof message.value === 'boolean') {
               autoOpenReports = message.value;

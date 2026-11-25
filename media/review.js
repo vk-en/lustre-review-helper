@@ -1447,6 +1447,52 @@ function linkChip(link) {
     default: return chip(link?.reason === 'changeId' ? t('No Change-Id') : t('Not on Gerrit'), 'muted', 'link');
   }
 }
+function patchConflicts(run) {
+  const section = element('section', undefined, 'rc-sec rc-conflicts'), scan = run.conflictScan;
+  const actions = element('div', undefined, 'row');
+  const check = element('button', scan?.busy ? t('Checking conflicts…') : t('Check current patchset for conflicts'), 'secondary');
+  check.disabled = !!scan?.busy;
+  check.addEventListener('click', () => send('checkConflicts', { id: run.id }));
+  actions.append(check);
+  if (scan?.busy) {
+    const cancel = element('button', t('Cancel'), 'secondary');
+    cancel.addEventListener('click', () => send('cancelConflicts', { id: run.id }));
+    actions.append(cancel);
+  }
+  section.append(actions);
+  if (scan?.error) section.append(element('p', scan.error, 'hint error'));
+  const data = scan?.data;
+  if (!data) return section;
+  section.append(element('span', t('PS {ps} · {branch} · checked {tried} of {candidates} candidates', data), 'rc-caption'));
+  if (data.needsRebase) {
+    section.append(element('p', [t('Rebase required before checking other changes.'), ...data.files].join('\n'), 'hint'));
+  } else if (!data.next && !data.rows.some(item => item.kind !== 'watch')) {
+    section.append(element('p', data.tried ? t('No conflicts in the trial merges.') : t('No changes were trial-merged.'), 'hint'));
+  }
+  if (data.next) section.append(element('p', [`${data.branch}-next · ${t('Merge conflict')}${data.next.number ? ` · #${data.next.number}` : ''}`,
+    ...data.next.files].join('\n'), 'hint'));
+  if (data.errors.length) section.append(element('p', t('Could not check {changes}.', { changes: data.errors.map(n => `#${n}`).join(', ') }), 'hint error'));
+  const landing = value => value === 'conflict' ? t('Merge conflict') : value === 'clean' ? t('Clean merge') : value;
+  for (const item of data.rows) {
+    const card = element('div', undefined, 'conflict-pair');
+    card.append(element('strong', [`#${item.number}`, item.ps ? `PS ${item.ps}` : '', item.subject].filter(Boolean).join(' · ')));
+    if (item.kind === 'merge') {
+      card.append(element('span', [`#${data.number} → #${item.number} · ${landing(item.first)}`,
+        `#${item.number} → #${data.number} · ${landing(item.second)}`].join('\n')));
+    } else card.append(element('span', item.kind === 'duplicate' ? t('Duplicate definition') : t('Same function edited')));
+    if (item.files.length) card.append(element('span', item.files.join('\n')));
+    if (item.notes.length) card.append(element('span', item.notes.join('\n')));
+    if (item.kind === 'merge') {
+      const details = element('button', t('Show conflict hunks'), 'link');
+      details.disabled = !!scan.busy;
+      details.addEventListener('click', () => send('checkConflicts', { id: run.id, other: item.number }));
+      card.append(details);
+    }
+    section.append(card);
+  }
+  return section;
+}
+
 function renderHistoryStats(run, id = 'historyStats') {
   const panel = $(id); panel.replaceChildren(); panel.hidden = !run;
   panel.classList.remove('outdated');
@@ -1526,6 +1572,7 @@ function renderHistoryStats(run, id = 'historyStats') {
   }
   if (rows.childNodes.length) top.append(rows);
   panel.append(top);
+  if (patch && !['MERGED', 'ABANDONED'].includes(live.status)) panel.append(patchConflicts(run));
 
   if (files.length) {
     const section = element('div', undefined, 'rc-sec');
@@ -2149,7 +2196,7 @@ function renderHistory() {
   if (gerrit) renderPublish();
   else { $('publicationStatus').hidden = true; $('sharedPublication').hidden = true; $('otherAiReviews').hidden = true; }
   fitTabs();
-  const details = JSON.stringify([gerrit, shown?.id, shown?.status, shown?.error, shown?.summary, shown?.gerritPatch, shown?.gerritState,
+  const details = JSON.stringify([gerrit, shown?.id, shown?.status, shown?.error, shown?.summary, shown?.gerritPatch, shown?.gerritState, shown?.conflictScan,
     shown?.results?.[0]?.comments?.map(comment => [comment.file, comment.message?.slice(0, 20)]), shown?.signature, shown?.since]);
   if (details !== displayedDetails) { renderResults(shown); renderHistoryStats(shown); displayedDetails = details; }
 }

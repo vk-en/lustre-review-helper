@@ -410,8 +410,14 @@ host. The existing lreview backend depends on POSIX process groups and
   reported/estimated cost, model, Reasoning, Full/Light depth and nonzero finding
   categories. For a Gerrit review it also shows the change owner, the reviewed
   patchset as **PS** and the target branch. Owner and branch are remembered from
-  the Gerrit patches list when the review starts; older reviews show only the
-  patchset. There is no total Findings counter, animation, account limits or
+  the Gerrit patches list. For an open change, **Check current patchset for
+  conflicts** runs `gerrit conflicts` in its project clone. The card identifies the
+  patchset and branch tested, collisions in either landing order, duplicate test
+  numbers or fail_loc values, and functions edited on both sides. **Show conflict
+  hunks** fetches the marked regions for the selected pair in a read-only editor.
+  The check reads Gerrit and fetches Git objects. It requires Git 2.40 or newer.
+  Older reviews show only the saved patchset when owner and branch are missing.
+  There is no total Findings counter, animation, account limits or
   log button here. Every selected patch has its own history entry, statistics,
   NEW marker and Markdown report, even when started in a batch. The button opens
   only that patch's report. Batch totals are never copied to individual patches;

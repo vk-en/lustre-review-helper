@@ -536,6 +536,10 @@ button.commit-gerrit:disabled { opacity: .45; }
 #historyStats.outdated { box-shadow: inset 3px 0 0 var(--q-orange); }
 .rc-sec { display: grid; gap: 8px; min-width: 0; padding: 11px 14px; }
 .rc-sec + .rc-sec { border-top: 1px solid var(--vscode-panel-border); }
+.rc-conflicts .row { margin: 0; }
+.rc-conflicts .hint, .conflict-pair { white-space: pre-line; overflow-wrap: anywhere; }
+.conflict-pair { display: grid; gap: 3px; padding-top: 6px; border-top: 1px solid var(--vscode-panel-border); }
+.conflict-pair .link { justify-self: start; }
 .rc-top { position: relative; }
 button.rc-link { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; padding: 0; display: grid; place-items: center; border-radius: 4px; background: transparent; color: var(--vscode-descriptionForeground); }
 button.rc-link svg { width: 14px; height: 14px; }

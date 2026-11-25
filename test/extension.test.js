@@ -22,6 +22,21 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   });
   await script(repo.directory, 'gerrit', `
     if(process.argv[2]==='--version'){console.log('gerrit 0.2.24');process.exit(0);}
+    if(process.argv[2]==='conflicts') {
+      const fs = require('fs'), path = require('path'), args = process.argv.slice(3);
+      const expected = ['https://review.whamcloud.com/64086', '--repo', __dirname, '--full'];
+      if(JSON.stringify(args.slice(0,4))!==JSON.stringify(expected) || process.env.GERRIT_URL!=='https://review.whamcloud.com') process.exit(4);
+      const hunks = args.length > 4;
+      if(hunks && args.slice(4).join(' ')!=='--hunks-for 64099') process.exit(4);
+      fs.appendFileSync(path.join(__dirname,'conflict-calls'), JSON.stringify(args)+'\\n');
+      const ps = fs.existsSync(path.join(__dirname,'changed-candidate')) ? 2 : 1;
+      const other = {cn:64099,ps,commit:String(ps).repeat(40),subject:'Overlapping change',files:['file.c'],
+        landing:{target_first:'clean',candidate_first:'conflict'}};
+      if(hunks) other.hunks = {landing:{'file.c':[{line:4,kind:'edit-edit',order:'candidate_first',text:'<<<<<<< theirs\\nnew code\\n======='}]}};
+      console.log(JSON.stringify({change:64086,project:'fs/lustre-release',branch:'master',patchset:3,commit:'a'.repeat(40),tip:'b'.repeat(40),status:'ok',
+        counts:{tried:2,candidates:3},conflicts:[other],watch:[],silent_only:[{cn:64100,ps:4,commit:'c'.repeat(40),
+          silent:[{file:'sanity.sh',check:'duplicate-test',what:'test_312'},{file:'obd_support.h',check:'duplicate-value',what:'0x1234'}]}],errors:[]}));process.exit(0);
+    }
     if(process.argv[2]==='diff') {
       if(process.argv.slice(3).join(' ')!=='https://review.whamcloud.com/64086 2 3'||process.env.GERRIT_URL!=='https://review.whamcloud.com')process.exit(4);
       console.log(JSON.stringify({files:[{path:'file.c',status:'M'}]}));process.exit(0);
@@ -841,6 +856,25 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   await fs.writeFile(path.join(repo.directory,'newer-patchset'),'');
   await receive({type:'section',value:'history'});
   await until(()=>messages.at(-1).gerritRun?.gerritState?.changed);
+  const conflictCalls = () => fs.readFile(path.join(repo.directory,'conflict-calls'),'utf8');
+  await assert.rejects(conflictCalls(), {code:'ENOENT'}, 'opening the card does not run trial merges');
+  await receive({type:'checkConflicts',id:remoteId});
+  const scan = () => messages.at(-1).gerritRun.conflictScan;
+  assert.deepEqual([scan().data.ps,scan().data.tried,scan().data.candidates],[3,2,3],'the checked PS can differ from the one reviewed');
+  assert.deepEqual(scan().data.rows.map(item=>[item.number,item.kind]),[[64099,'merge'],[64100,'duplicate']]);
+  assert.deepEqual(scan().data.rows[1].notes,['sanity.sh · duplicate-test · test_312','obd_support.h · duplicate-value · 0x1234']);
+  assert.deepEqual([scan().data.rows[0].first,scan().data.rows[0].second],['clean','conflict']);
+  await receive({type:'checkConflicts',id:remoteId,other:77777});
+  assert.equal((await conflictCalls()).trim().split('\n').length,1,'only listed collisions can request hunks');
+  await receive({type:'checkConflicts',id:remoteId,other:64099});
+  const hunkDoc = shown.at(-1).document;
+  assert.match(hunkDoc.path,/Gerrit-64086-PS3-64099-PS1\.diff$/);
+  assert.match(textProviders.get('lustre-review').provideTextDocumentContent(hunkDoc),/file.c:4 · edit-edit · #64099 → #64086\n<<<<<<< theirs/);
+  await fs.writeFile(path.join(repo.directory,'changed-candidate'),'');
+  await receive({type:'checkConflicts',id:remoteId,other:64099});
+  assert.match(scan().error,/patchsets changed/);
+  assert.equal(scan().data.rows[0].ps,2);
+  assert.equal(shown.at(-1).document,hunkDoc,'a new patchset is never shown under the old title');
   assert.deepEqual(JSON.parse(JSON.stringify(messages.at(-1).gerritRun.gerritState)),{kind:'gerrit',number:64086,reviewed:2,current:3,status:'NEW',conflict:true,
     build:'passed',tests:'failed',votes:[{name:'Other Reviewer',value:1}],changed:['file.c'],loading:false});
   await fs.unlink(path.join(repo.directory,'newer-patchset'));
