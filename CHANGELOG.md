@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 
 - Support Auggie 1.2 sign-in, model selection and usage reporting with
   the updated `lreview` adapter. Reviews show token usage and billed USD or

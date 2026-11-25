@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-0078d4?style=flat-square">
+  <img alt="Version 0.1.1" src="https://img.shields.io/badge/version-0.1.1-0078d4?style=flat-square">
   <img alt="VS Code 1.96 or newer" src="https://img.shields.io/badge/VS%20Code-1.96%2B-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white">
   <img alt="Agents: Codex, Claude Code, Augment" src="https://img.shields.io/badge/agents-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Augment-8957e5?style=flat-square">
   <img alt="Six languages" src="https://img.shields.io/badge/languages-EN%20%C2%B7%20DE%20%C2%B7%20ES%20%C2%B7%20JA%20%C2%B7%20ZH%20%C2%B7%20RU-2ea043?style=flat-square">

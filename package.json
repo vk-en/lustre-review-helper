@@ -2,7 +2,7 @@
   "name": "lustre-review-helper",
   "displayName": "Lustre Review Helper",
   "description": "%extension.description%",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vk-en",
   "license": "BSD-2-Clause",
   "icon": "media/icon.png",
@@ -150,7 +150,7 @@
       },
       {
         "command": "lustreReview.version",
-        "title": "v0.1.0"
+        "title": "v0.1.1"
       },
       {
         "command": "lustreReview.reports",
