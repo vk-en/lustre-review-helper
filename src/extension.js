@@ -452,10 +452,11 @@ async function activate(context) {
       const details = changeInfo.get(patch.number);
       const item = projectInfo?.project === patch.project ? queueItems().find(entry => entry.number === patch.number) : undefined;
       const current = Math.max(details?.ps || 0, item?.ps || 0) || undefined;
-      const posted = publication.get(report.runId, report.reportSha).status === 'posted';
+      const status = publication.get(report.runId, report.reportSha).status, posted = status === 'posted';
       const elsewhere = !posted && !!registry.find(patch.project, patch.number, patch.patchset);
       return { ...row, gerrit: { change: patch.number, ps: patch.patchset, project: patch.project, ...(patch.branch ? { branch: patch.branch } : {}),
-        ...(current ? { current } : {}), published: posted, ...(elsewhere ? { publishedElsewhere: true } : {}) } };
+        ...(current ? { current } : {}), published: posted, ...(status === 'drafted' ? { drafted: true } : {}),
+        ...(elsewhere ? { publishedElsewhere: true } : {}) } };
     }
     const sha = report.reportSha, changeId = localChangeIds.get(sha) || undefined;
     const view = changeId && projectInfo?.project ? links.view(projectInfo.project, { sha, changeId }) : { state: 'none' };
@@ -1042,9 +1043,14 @@ async function activate(context) {
       throw new Error(earlier.signature ? t('PS {ps} of change #{number} was already published {date} by another review as {signature}. A patchset gets one AI review.', values) :
         t('PS {ps} of change #{number} was already published {date} by another review. A patchset gets one AI review.', values));
     }
-    await publication.publish(report.runId, report.reportSha);
-    await registry.record(service.runs.get(report.runId)).catch(error => output.appendLine(`Published reviews: ${error.message}`));
-    await queue.markReviewed(patch.project, patch.number, patch.patchset).catch(error => output.appendLine(`Gerrit reviews: ${error.message}`));
+    try {
+      await publication.publish(report.runId, report.reportSha);
+    } finally {
+      await registry.record(service.runs.get(report.runId)).catch(error => output.appendLine(`Published reviews: ${error.message}`));
+    }
+    if (publication.get(report.runId, report.reportSha).status === 'posted') {
+      await queue.markReviewed(patch.project, patch.number, patch.patchset).catch(error => output.appendLine(`Gerrit reviews: ${error.message}`));
+    }
     notice = ''; update();
   }
   async function authenticate(target, action) {

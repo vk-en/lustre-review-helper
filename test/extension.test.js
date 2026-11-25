@@ -119,7 +119,8 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
     const summaryFile=path.join(dest,'summary.json'),summary=fs.existsSync(summaryFile)?JSON.parse(fs.readFileSync(summaryFile,'utf8')):{};
     if(args[0]==='post') {
       if(args.includes('--force')||!summary[args[1]])process.exit(4);
-      fs.appendFileSync(path.join(__dirname,'published.jsonl'),JSON.stringify(args)+'\\n');
+      if(process.env.GERRIT_CLI_MODE==='drafts') console.error('[GERRIT_CLI_MODE=drafts] created 1 draft comment(s); nothing is published.');
+      else fs.appendFileSync(path.join(__dirname,'published.jsonl'),JSON.stringify(args)+'\\n');
       summary[args[1]].posted=true;
       fs.writeFileSync(summaryFile,JSON.stringify(summary));process.exit(0);
     }
@@ -753,6 +754,19 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   await receive({type:'autoOpenReports',value:false});
   await receive({type:'agent',value:'claude'});
   await receive({type:'clearSelection'});
+  const previousMode = process.env.GERRIT_CLI_MODE;
+  t.after(() => { if (previousMode === undefined) delete process.env.GERRIT_CLI_MODE; else process.env.GERRIT_CLI_MODE = previousMode; });
+  process.env.GERRIT_CLI_MODE = 'drafts';
+  await receive({type:'addGerritPatch',url:'https://review.whamcloud.com/64086/2'});
+  await receive({type:'run'});
+  const draftId = messages.at(-1).statsRun.id;
+  await until(() => messages.at(-1).gerritRun?.id === draftId && messages.at(-1).gerritRun.publication.draftsOnly);
+  await receive({type:'publishGerrit',id:draftId});
+  assert.equal(messages.at(-1).gerritRun.publication.status, 'drafted');
+  const draftRow = messages.at(-1).gerritHistory.find(row => row.runId === draftId);
+  assert.deepEqual([draftRow.gerrit.drafted, draftRow.gerrit.published], [true, false]);
+  assert.ok(messages.at(-1).queue.waiting.some(item => item.number === 64086), 'a private draft leaves the change in Waiting Review');
+  process.env.GERRIT_CLI_MODE = 'full';
   await receive({type:'addGerritPatch',url:'https://review.whamcloud.com/64086/2'});
   await Promise.all([receive({type:'run'}), receive({type:'run'})]);
   assert.deepEqual(errors, []);

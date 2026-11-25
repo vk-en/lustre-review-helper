@@ -8,6 +8,7 @@ const { t } = require('./l10n');
 
 const ORIGIN = 'https://review.whamcloud.com';
 const active = run => ['running', 'cancelling'].includes(run.status);
+const draftsOnly = env => !['', 'full'].includes((env.GERRIT_CLI_MODE || '').trim().toLowerCase());
 
 async function postTarget(service, id, key) {
   const run = service.get(id);
@@ -33,15 +34,18 @@ async function postTarget(service, id, key) {
 
 // lreview post owns revision pinning, the manifest lock, no-vote policy and
 // duplicate prevention. Never pass --force or omit the selected manifest key.
-function post(binary, args, cwd) {
+function post(binary, args, cwd, env) {
   return new Promise((resolve, reject) => execFile(binary, args, {
-    cwd, timeout: 120000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024,
-    env: { ...process.env, GERRIT_URL: ORIGIN, NO_COLOR: '1' },
-  }, error => {
-    if (!error) return resolve();
-    const safe = new Error(error.killed ? t('Publication status is uncertain. Check the patch in Gerrit before retrying.') :
+    cwd, env, timeout: 120000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024,
+  }, (error, _stdout, stderr) => {
+    // lreview records posted=true in both modes. gerrit-cli reports the
+    // completed conversion to private drafts on stderr.
+    const drafted = /^\[GERRIT_CLI_MODE=drafts\] created \d+ draft comment\(s\); nothing is published\./m.test(stderr);
+    if (!error) return resolve(drafted ? 'drafted' : 'posted');
+    const uncertain = !!error.killed || drafted || (draftsOnly(env) && typeof error.code === 'number');
+    const safe = new Error(uncertain ? t('Publication status is uncertain. Check the patch in Gerrit before retrying.') :
       t('Could not publish the review. Check Gerrit CLI credentials, access and installation.'));
-    safe.uncertain = !!error.killed;
+    safe.uncertain = uncertain;
     reject(safe);
   }));
 }
@@ -60,18 +64,32 @@ class GerritPublication {
       const { run, entry, patch } = await postTarget(this.service, id, key);
       const saved = run.publications?.[key];
       const text = value => typeof value === 'string' && value.trim() ? value.trim() : undefined;
-      this.states.set(identity, entry.posted ? { status: 'posted', message: t('Published to Gerrit #{number}, patchset {ps}.', { number: patch.number, ps: patch.patchset }),
-        postedAt: text(entry.posted_at) || (saved?.status === 'posted' ? text(saved.updatedAt) : undefined) } :
-        ['publishing', 'unknown'].includes(saved?.status) ? { status: 'unknown', message: t('Publication status is uncertain. Check the patch in Gerrit before retrying.') } :
-        { status: 'ready', message: t('Publishes the assessment and inline comments to #{number}, patchset {ps}. No vote is added.', { number: patch.number, ps: patch.patchset }) });
+      const values = { number: patch.number, ps: patch.patchset };
+      let state;
+      if (saved?.status === 'drafted') {
+        state = { status: 'drafted', message: t('Drafts saved on Gerrit #{number}, patchset {ps}. Open Gerrit to publish them.', values) };
+      } else if (['unknown', 'drafting'].includes(saved?.status) || (saved?.status === 'publishing' && !entry.posted)) {
+        state = { status: 'unknown', message: t('Publication status is uncertain. Check the patch in Gerrit before retrying.') };
+      } else if (entry.posted) {
+        state = { status: 'posted', message: t('Published to Gerrit #{number}, patchset {ps}.', values),
+          postedAt: text(entry.posted_at) || (saved?.status === 'posted' ? text(saved.updatedAt) : undefined) };
+      } else if (draftsOnly(process.env)) {
+        state = { status: 'ready', draftsOnly: true, message: t('Saves private drafts on Gerrit #{number}, patchset {ps}.', values) };
+      } else {
+        state = { status: 'ready', message: t('Publishes the assessment and inline comments to #{number}, patchset {ps}. No vote is added.', values) };
+      }
+      this.states.set(identity, state);
     } catch (error) { this.states.set(identity, { status: 'unavailable', message: error.message }); }
   }
   async publish(id, key) {
     const identity = this.identity(id, key);
     if (this.pending.has(identity)) return;
     this.pending.add(identity);
-    this.states.set(identity, { status: 'publishing', message: t('Publishing to Gerrit…') }); this.changed();
+    const env = { ...process.env, GERRIT_URL: ORIGIN, NO_COLOR: '1' };
+    const draftMode = draftsOnly(env);
+    this.states.set(identity, { status: 'publishing', draftsOnly: draftMode, message: draftMode ? t('Saving drafts…') : t('Publishing to Gerrit…') }); this.changed();
     let started = false;
+    let outcome;
     const save = async status => {
       const run = this.service.runs.get(id);
       run.publications ||= {}; run.publications[key] = { status, updatedAt: new Date().toISOString() };
@@ -79,8 +97,9 @@ class GerritPublication {
     };
     try {
       const target = await postTarget(this.service, id, key);
-      if (target.entry.posted) return;
-      if (['publishing', 'unknown'].includes(target.run.publications?.[key]?.status)) {
+      const saved = target.run.publications?.[key]?.status;
+      if (target.entry.posted || saved === 'drafted') return;
+      if (['publishing', 'drafting', 'unknown'].includes(saved)) {
         const error = new Error(t('Publication status is uncertain. Check the patch in Gerrit before retrying.'));
         error.uncertain = true; throw error;
       }
@@ -90,17 +109,18 @@ class GerritPublication {
       await this.service.reportFiles(id, key);
       const signature = this.service.get(id).signature;
       if (!signature) throw new Error(t('The report signature is unavailable. Reopen the report and retry.'));
-      await save('publishing'); started = true;
-      await this.execute(binary, ['post', target.manifestKey, '--results-dir', target.directory, '--prefix', signature], target.run.repo);
+      await save(draftMode ? 'drafting' : 'publishing'); started = true;
+      outcome = await this.execute(binary, ['post', target.manifestKey, '--results-dir', target.directory, '--prefix', signature], target.run.repo, env);
       const confirmed = await postTarget(this.service, id, key);
-      if (!confirmed.entry.posted) {
+      if (!confirmed.entry.posted || (draftMode && outcome !== 'drafted')) {
         const error = new Error(t('Publication was not confirmed. Check the patch in Gerrit before retrying.'));
         error.uncertain = true; throw error;
       }
-      await save('posted');
+      await save(outcome === 'drafted' ? 'drafted' : 'posted');
     } catch (error) {
+      if (started && outcome === 'drafted') error.uncertain = true;
       if (started) await save(error.uncertain ? 'unknown' : 'error');
-      this.states.set(identity, { status: error.uncertain ? 'unknown' : 'error', message: error.message });
+      this.states.set(identity, { status: error.uncertain ? 'unknown' : 'error', draftsOnly: draftMode, message: error.message });
       throw error;
     } finally {
       this.pending.delete(identity);

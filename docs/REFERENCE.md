@@ -485,7 +485,10 @@ host. The existing lreview backend depends on POSIX process groups and
   chosen patch. Publish to Gerrit is locked: click the lock inside the button
   to enable it. The lock closes again after a click, when another review is
   chosen and when the view reloads. Once published, the button reads
-  **Published 16.10.26, 18:19** and stays disabled. Every confirmed publication
+  **Published 16.10.26, 18:19** and stays disabled. In Gerrit CLI drafts mode
+  the same action reads **Save drafts in Gerrit**. After sending, the button
+  reads **Drafts saved**. Open the change in Gerrit to publish those drafts.
+  Every confirmed publication
   is also recorded in a registry shared by all VS Code windows of this profile
   on this machine (`publications.json` in the extension's global storage). It
   is keyed by Gerrit project, change and patchset, not by folder, so two clones

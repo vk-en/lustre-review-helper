@@ -1581,13 +1581,17 @@ function renderPublish() {
   if (blocked) unlockedPublish = undefined;
   const unlocked = !blocked && unlockedPublish === run.id;
   const lock = $('publishLock');
-  lock.hidden = ['posted', 'publishing'].includes(status);
+  lock.hidden = ['posted', 'drafted', 'publishing'].includes(status);
   lock.disabled = !!blocked;
   lock.setAttribute('aria-pressed', String(unlocked));
   lock.setAttribute('aria-label', unlocked ? t('Lock Publish to Gerrit') : t('Unlock Publish to Gerrit'));
   lock.title = blocked || (unlocked ? t('Lock publishing again.') : t('Unlock to publish this review to Gerrit.'));
   const postedAt = shortDate(shared ? shared.postedAt : publication?.postedAt);
-  $('publishGerrit').textContent = status === 'posted' ? (postedAt ? t('Published {date}', { date: postedAt }) : t('Published')) : status === 'publishing' ? t('Publishing…') : t('Publish to Gerrit');
+  let label = publication?.draftsOnly ? t('Save drafts in Gerrit') : t('Publish to Gerrit');
+  if (status === 'posted') label = postedAt ? t('Published {date}', { date: postedAt }) : t('Published');
+  if (status === 'drafted') label = t('Drafts saved');
+  if (status === 'publishing') label = publication.draftsOnly ? t('Saving drafts…') : t('Publishing…');
+  $('publishGerrit').textContent = label;
   $('publishGerrit').disabled = !unlocked;
   $('publishGerrit').title = shared ? blocked : status === 'posted' ? publication.message : blocked || (unlocked ? publication.message : t('Unlock first to publish.'));
   $('publishGroup').classList.toggle('unavailable', !!blocked);
@@ -1601,7 +1605,7 @@ function renderPublish() {
   $('otherAiReviews').replaceChildren(...others.map(review => element('p',
     `${othersText({ ps: run.gerritPatch.patchset }, review, review.mine ? t('Your account') : review.author)}.`)));
   // The button itself says Published; the hint explains only what needs attention.
-  $('publicationStatus').hidden = !publication?.message || !['error', 'unknown', 'unavailable'].includes(status);
+  $('publicationStatus').hidden = !publication?.message || !['drafted', 'error', 'unknown', 'unavailable'].includes(status);
   $('publicationStatus').textContent = publication?.message || '';
   $('publicationStatus').className = `hint ${['error', 'unknown'].includes(status) ? 'error' : ''}`;
 }
@@ -1664,7 +1668,7 @@ function historyToPublish(rows) {
     const key = `${row.gerrit.change}:${row.gerrit.ps}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (!row.gerrit.published && !row.gerrit.publishedElsewhere) ids.add(row.id);
+    if (!row.gerrit.published && !row.gerrit.publishedElsewhere && !row.gerrit.drafted) ids.add(row.id);
   }
   return ids;
 }
@@ -2031,7 +2035,8 @@ function historyCardContent(key) {
   const gerritPublication = row => {
     const node = element('div', undefined, `tip-line h-tip-cloud${row.gerrit.published ? ' published' : ''}`);
     node.append(qicon(row.gerrit.published ? 'cloudCheck' : 'cloudUp'), element('span', row.gerrit.published ? t('Published to Gerrit') :
-      row.gerrit.publishedElsewhere ? t('Not published; another AI review of PS {ps} is', { ps: row.gerrit.ps }) : t('Not published to Gerrit')));
+      row.gerrit.publishedElsewhere ? t('Not published; another AI review of PS {ps} is', { ps: row.gerrit.ps }) :
+      row.gerrit.drafted ? t('Drafts saved') : t('Not published to Gerrit')));
     return node;
   };
   if (key.startsWith('g') && rows.find(row => historyGroupKey(row) === key.slice(1))?.gerrit) {

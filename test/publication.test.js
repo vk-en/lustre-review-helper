@@ -107,6 +107,59 @@ test('publication refuses mismatched revisions, hosts, statuses, providers and e
   await assert.rejects(postTarget(f.service,f.id,f.key),/no completed review/);
 });
 
+test('Gerrit drafts stay private in saved history across restarts and mode changes', async t => {
+  const f = await setup(t);
+  const previous = process.env.GERRIT_CLI_MODE;
+  t.after(() => { if (previous === undefined) delete process.env.GERRIT_CLI_MODE; else process.env.GERRIT_CLI_MODE = previous; });
+  process.env.GERRIT_CLI_MODE = ' Drafts ';
+  const binary = await script(f.root, 'draft-post', `
+    const fs = require('node:fs'), path = require('node:path');
+    fs.appendFileSync('draft-calls', process.env.GERRIT_CLI_MODE + '\\n');
+    const file = path.join(process.argv[process.argv.indexOf('--results-dir') + 1], 'summary.json');
+    const summary = JSON.parse(fs.readFileSync(file));
+    summary[process.argv[3]].posted = true;
+    fs.writeFileSync(file, JSON.stringify(summary));
+    console.error('[GERRIT_CLI_MODE=drafts] created 2 draft comment(s); nothing is published. Review and publish them in the Gerrit web UI.');
+  `);
+  const publication = new GerritPublication({ service: f.service, find: async () => binary });
+  await publication.refresh(f.id, f.key);
+  assert.equal(publication.get(f.id, f.key).draftsOnly, true);
+  await publication.publish(f.id, f.key);
+  assert.equal(publication.get(f.id, f.key).status, 'drafted');
+  assert.equal(f.run.publications[f.key].status, 'drafted');
+
+  process.env.GERRIT_CLI_MODE = 'full';
+  const service = new ReviewService({ storage: f.service.storage });
+  await service.initialize();
+  service.setRepositories([f.root]);
+  const restored = new GerritPublication({ service, find: async () => binary });
+  await restored.refresh(f.id, f.key);
+  assert.equal(restored.get(f.id, f.key).status, 'drafted');
+  await restored.publish(f.id, f.key);
+  assert.equal(await fs.readFile(path.join(f.root, 'draft-calls'), 'utf8'), ' Drafts \n');
+
+  // A stop between sending some drafts and saving the receipt cannot be
+  // resolved by lreview's posted bit, even on a subsequent full-mode launch.
+  service.runs.get(f.id).publications[f.key].status = 'drafting';
+  await restored.refresh(f.id, f.key);
+  assert.equal(restored.get(f.id, f.key).status, 'unknown');
+});
+
+test('draft mode requires Gerrit confirmation even when lreview marks the review as posted', async t => {
+  const f = await setup(t), previous = process.env.GERRIT_CLI_MODE;
+  t.after(() => { if (previous === undefined) delete process.env.GERRIT_CLI_MODE; else process.env.GERRIT_CLI_MODE = previous; });
+  process.env.GERRIT_CLI_MODE = 'unexpected'; // gerrit-cli treats any non-full value as drafts.
+  const publication = new GerritPublication({ service: f.service, find: async () => 'lreview', execute: async () => {
+    f.summary[f.manifestKey].posted = true;
+    await f.save();
+    return 'posted';
+  } });
+  await assert.rejects(publication.publish(f.id, f.key), /not confirmed/);
+  await publication.refresh(f.id, f.key);
+  assert.equal(publication.get(f.id, f.key).status, 'unknown');
+  assert.equal(f.run.publications[f.key].status, 'unknown');
+});
+
 test('publication supports clean results and successful patches in a partially failed batch', async t => {
   const f=await setup(t);
   f.run.status='failed';f.run.results[0].status='clean';

@@ -92,6 +92,14 @@ test('finished reviews waiting to be published are shared until published, forgo
   assert.equal(await second.refresh(), true);
   assert.deepEqual(second.ready('fs/lustre-release', 64086, 2).map(entry => [entry.run, entry.folder]), [[A, '/work/lustre']], 'another window sees it');
   assert.equal(second.ready('fs/lustre-release', 64086, 3)[0].folder, undefined, 'only absolute folders are kept');
+  const drafts = finished(A);
+  drafts.publications['gerrit:64086:2'] = { status: 'drafted' };
+  await first.record(drafts);
+  await second.refresh();
+  assert.deepEqual(second.ready('fs/lustre-release', 64086, 2), [], 'drafts are no longer ready to send from the extension');
+  assert.equal(second.find('fs/lustre-release', 64086, 2), undefined, 'drafts are private');
+  assert.equal(second.ready('fs/lustre-release', 64086, 3).length, 1, 'unrelated reviews remain ready');
+  await first.record(finished(A));
   await second.record(finished(B, { posted: true }));
   await first.refresh();
   assert.deepEqual(first.ready('fs/lustre-release', 64086, 2), [], 'publishing the patchset anywhere ends its unpublished reviews');

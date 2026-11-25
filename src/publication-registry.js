@@ -56,7 +56,7 @@ function cleanReady(entry) {
 function mergeReady(entries, additions, publications, forget = []) {
   const gone = new Set(forget), posted = new Set(publications.map(identity));
   const merged = new Map(entries.filter(entry => !gone.has(entry.run)).map(entry => [readyIdentity(entry), entry]));
-  for (const entry of additions.map(cleanReady).filter(Boolean)) if (!gone.has(entry.run)) merged.set(readyIdentity(entry), entry);
+  for (const entry of additions.map(cleanReady).filter(Boolean)) merged.set(readyIdentity(entry), entry);
   return [...merged.values()].filter(entry => !posted.has(identity(entry)))
     .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || readyIdentity(a).localeCompare(readyIdentity(b))).slice(0, READY_LIMIT);
 }
@@ -77,7 +77,8 @@ function fromRun(run) {
 function readyFromRun(run) {
   if (!run || !Array.isArray(run.gerritPatches) || ['running', 'cancelling'].includes(run.status)) return [];
   return run.gerritPatches.flatMap(patch => {
-    if (run.publications?.[patch.id]?.status === 'posted') return [];
+    const status = run.publications?.[patch.id]?.status;
+    if (status && status !== 'error') return [];
     const result = run.results?.find(entry => (entry.target || entry.sha) === patch.id);
     if (!['clean', 'findings'].includes(result?.status)) return [];
     return [{ project: patch.project, change: patch.number, patchset: patch.patchset, subject: patch.subject,
@@ -130,7 +131,8 @@ class PublicationRegistry {
       ready: [...archived, ...current].flatMap(readyFromRun), replaceReady: true });
   }
 
-  record(run) { return this.transaction({ publications: fromRun(run), ready: readyFromRun(run) }); }
+  // Replace this run's ready entries, including when its last review became drafts.
+  record(run) { return this.transaction({ publications: fromRun(run), ready: readyFromRun(run), forget: [run.id] }); }
 
   // Reviews whose history was cleared in this window.
   forget(runs) { return this.transaction({ forget: [...runs] }); }
