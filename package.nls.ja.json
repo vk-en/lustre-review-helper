@@ -35,5 +35,5 @@
   "config.timeout": "コミットごとのタイムアウト（秒）。",
   "config.mode": "実行する Lustre のレビュープロトコル。",
   "config.claudePath": "Claude Code の絶対パス。空の場合はインストール済みの Claude Code 拡張機能のバイナリ、次に PATH を使います。",
-  "config.auggiePath": "公式 Auggie CLI の絶対パス。auggie login が必要です。空の場合は PATH と ~/.local/bin を検索します。"
+  "config.auggiePath": "公式 Auggie CLI の絶対パス。auggie auth login が必要です。空の場合は PATH と ~/.local/bin を検索します。"
 }

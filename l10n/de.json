@@ -1,5 +1,5 @@
 {
- "Cannot load Augment models. Use “Auggie login” in AI settings.": "Augment-Modelle konnten nicht geladen werden. Verwenden Sie „Auggie Login“ in den KI-Einstellungen.",
+ "Cannot load Augment models. Sign in to Auggie in AI Settings.": "Augment-Modelle konnten nicht geladen werden. Melden Sie sich in den KI-Einstellungen bei Auggie an.",
  "Auggie returned an invalid model catalog. Update Auggie CLI.": "Auggie hat einen ungültigen Modellkatalog geliefert. Aktualisieren Sie die Auggie CLI.",
  "Auggie returned no model catalog. Update Auggie CLI.": "Auggie hat keinen Modellkatalog geliefert. Aktualisieren Sie die Auggie CLI.",
  "Auggie returned no available models. Check your Augment account.": "Auggie hat keine verfügbaren Modelle geliefert. Prüfen Sie Ihr Augment-Konto.",

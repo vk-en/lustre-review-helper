@@ -26,6 +26,22 @@ async function readJson(file) {
   return JSON.parse(await fs.readFile(file, 'utf8'));
 }
 
+// Some older runs have only part of their usage in run.json, and some of
+// their worker logs may since have been deleted. Keep every saved total.
+function recoverUsage(saved, found) {
+  const result = { ...saved };
+  if (result.tokens == null && found.tokens != null) {
+    result.tokens = found.tokens;
+    result.tokensPartial = found.tokensPartial;
+  }
+  if ((result.credits == null && found.credits != null) || (result.costUsd == null && found.costUsd != null)) {
+    result.credits ??= found.credits;
+    result.costUsd ??= found.costUsd;
+    if (result.costPartial !== false) result.costPartial = found.costPartial;
+  }
+  return result;
+}
+
 async function artifactPath(directory, relative) {
   if (typeof relative !== 'string' || path.isAbsolute(relative)) throw new Error('Invalid artifact path.');
   const root = await fs.realpath(directory);
@@ -185,9 +201,13 @@ class ReviewService extends EventEmitter {
         }
         if (run.agent === 'auggie' && !ACTIVE.has(run.status) && run.usage?.tokens == null) {
           try {
-            const usage = await new LiveUsage({ ...run, directory: path.join(this.storage, name) }).poll();
-            if (usage.tokens !== null) {
-              run.usage = { ...run.usage, tokens: usage.tokens, tokensPartial: usage.tokensPartial };
+            const usage = await new LiveUsage({ ...run, directory: path.join(this.storage, name) }).poll({ final: true });
+            if (usage.tokens !== null || usage.credits !== null || usage.costUsd !== null) {
+              run.usage = recoverUsage(run.usage, usage);
+              run.usage.byCommit = { ...run.usage.byCommit };
+              for (const [key, measured] of Object.entries(usage.byCommit)) {
+                run.usage.byCommit[key] = recoverUsage(run.usage.byCommit[key], measured);
+              }
             }
           } catch { /* Older session files may have been removed. */ }
         }
@@ -321,8 +341,8 @@ class ReviewService extends EventEmitter {
       this.children.set(id, active);
       const telemetry = new LiveUsage(run, { claudeMetrics: metrics });
       let sampling;
-      const sample = () => {
-        if (!sampling) sampling = telemetry.poll().then(usage => {
+      const sample = (final = false) => {
+        if (!sampling) sampling = telemetry.poll({ final }).then(usage => {
           run.usage = usage;
           this.emit('changed', id);
         }).catch(() => {}).finally(() => { sampling = undefined; });
@@ -339,6 +359,7 @@ class ReviewService extends EventEmitter {
         this.emit('changed', id);
       };
       const execute = async () => {
+        let finalStatus;
         try {
           run.exitCode = 0;
           // lreview's --local applies to the entire invocation. Keep local and
@@ -361,24 +382,25 @@ class ReviewService extends EventEmitter {
           }
           try { run.results = await collectResults(path.join(directory, 'artifacts'), commits, patches, run.status === 'cancelling' ? 'cancelled' : 'failed'); }
           catch (error) { if (run.status !== 'cancelling') throw error; }
-          if (run.status === 'cancelling') run.status = 'cancelled';
+          if (run.status === 'cancelling') finalStatus = 'cancelled';
           else if (run.exitCode !== 0 || run.results.some(r => !['findings', 'clean'].includes(r.status))) {
-            run.status = 'failed';
+            finalStatus = 'failed';
             run.error = `One or more reviews failed (exit ${run.exitCode}). See individual results and the log.`;
-          } else run.status = 'completed';
+          } else finalStatus = 'completed';
         } catch (error) {
           // Collect what finished before announcing the end: a watcher that
           // sees the final status must also see the results.
           const cancelled = run.status === 'cancelling';
           try { run.results = await collectResults(path.join(directory, 'artifacts'), commits, patches, cancelled ? 'cancelled' : 'failed'); }
           catch { /* No usable manifest yet; retain the original error. */ }
-          run.status = cancelled ? 'cancelled' : 'failed';
+          finalStatus = cancelled ? 'cancelled' : 'failed';
           run.error = error.message;
         } finally {
           clearInterval(usageTimer);
           await sampling;
-          await sample();
+          await sample(true);
           await metrics?.dispose();
+          run.status = run.status === 'cancelling' ? 'cancelled' : finalStatus;
           run.finishedAt = new Date().toISOString();
           await this.persist(run).catch(error => { run.error = `Cannot save review: ${error.message}`; });
           this.children.delete(id);

@@ -66,6 +66,38 @@ test('Augment credits remain credits and absent usage remains unknown', async t 
   const live=await usage.poll();assert.equal(live.tokens,null);assert.equal(live.credits,12);assert.equal(live.costUsd,null);
 });
 
+test('Auggie print-mode usage counts completed requests once and reads final billing without a session', async t => {
+  const root = await temporary(t), dir = path.join(root, 'artifacts');
+  await fs.mkdir(dir);
+  const usage = new LiveUsage({directory: root, agent: 'auggie', commits: ['one', 'two']});
+  const file = path.join(dir, 'one.log'), second = path.join(dir, 'two.log');
+  const message = {role:'assistant', requestId:'r1', usage:{input:10,output:2,cacheRead:8,cacheWrite:1,totalTokens:21},
+    billingMetadata:{transaction_id:'bill1',usage_unit:2,cost_usd:'0.08'}};
+  const end = m => line({type:'message_end', message:m});
+  await fs.writeFile(file, end(message) + end(message) + line({type:'turn_end', message}) +
+    line({type:'agent_end', messages:[message]}) + end({...message, role:'toolResult', requestId:'tool'}));
+  const credit = {role:'assistant', timestamp:100, usage:{input:5,output:1,cacheRead:3,cacheWrite:1},
+    billingMetadata:{transaction_id:'bill2',usage_unit:1,credits_consumed:8}};
+  await fs.writeFile(second, end(credit));
+  let live = await usage.poll();
+  assert.equal(live.tokens, 31); assert.equal(live.costUsd, 0.08); assert.equal(live.credits, 8);
+  assert.equal(live.tokensPartial, false);
+  await fs.appendFile(second, end({role:'assistant',timestamp:101}));
+  assert.equal((await usage.poll()).tokensPartial, true);
+  await fs.appendFile(file, line({type:'billing',usage_unit:'usd',total_cost:0.09,sub_agent_cost:0.01}));
+  // A big closing snapshot can span multiple reader buffers before the bill.
+  await fs.appendFile(second, line({type:'agent_end',data:'x'.repeat(9 * 1024 * 1024)}) +
+    line({type:'billing',usage_unit:'credits',total_cost:42,sub_agent_cost:0}));
+  await fs.writeFile(path.join(dir,'summary.json'), JSON.stringify({
+    a:{sha:'one',local:true,log:'one.log',cost_usd:0.09}, b:{sha:'two',local:true,log:'two.log'},
+  }));
+  live = await usage.poll({final:true});
+  assert.equal(live.tokens,31); assert.equal(live.costUsd,0.09); assert.equal(live.credits,42);
+  assert.equal(live.byCommit.one.tokens,21); assert.equal(live.byCommit.one.tokensPartial,true);
+  assert.equal(live.byCommit.two.costUsd,null); assert.equal(live.byCommit.two.credits,42);
+  assert.equal(live.costPartial,false);
+});
+
 test('Augment follows only the worker session, updates before completion and keeps totals through compaction', async t => {
   const root = await temporary(t), dir = path.join(root, 'artifacts'), home = path.join(root, 'augment');
   await fs.mkdir(dir); await fs.mkdir(path.join(home, 'sessions'), {recursive:true});

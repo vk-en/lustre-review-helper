@@ -35,5 +35,5 @@
   "config.timeout": "Zeitlimit in Sekunden pro Commit.",
   "config.mode": "Auszuführendes Lustre-Review-Protokoll.",
   "config.claudePath": "Absoluter Pfad zu Claude Code. Leer: die Binärdatei der installierten Claude-Code-Erweiterung verwenden, dann den PATH.",
-  "config.auggiePath": "Absoluter Pfad zur offiziellen Auggie CLI. Erfordert auggie login. Leer: im PATH und in ~/.local/bin suchen."
+  "config.auggiePath": "Absoluter Pfad zur offiziellen Auggie CLI. Erfordert auggie auth login. Leer: im PATH und in ~/.local/bin suchen."
 }

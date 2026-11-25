@@ -24,6 +24,7 @@ test('agent version probes return only versions, tolerate unsupported output and
     ['codex', 'codex-cli 0.162.0-alpha.17.2', '0.162.0-alpha.17.2'],
     ['claude', '2.1.301 (Claude Code)', '2.1.301'],
     ['auggie', '0.36.0 (commit 7c61e5bb)', '0.36.0'],
+    ['auggie', '1.2.2\ncommit: 6f24c7b3\nbuilt:  2026-11-17T04:30:33Z', '1.2.2'],
     ['gerrit', 'gerrit 0.2.24', '0.2.24'],
     ['invalid', 'account secret 1.2.3', undefined],
   ]) {

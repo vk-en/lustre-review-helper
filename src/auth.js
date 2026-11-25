@@ -10,15 +10,22 @@ const AGENTS = {
   claude: { name: 'Claude Code', url: 'https://code.claude.com/docs/en/overview',
     status: ['auth', 'status', '--json'], login: ['auth', 'login'], logout: ['auth', 'logout'] },
   auggie: { name: 'Auggie', url: 'https://docs.augmentcode.com/cli/setup-auggie/install-auggie-cli',
-    status: ['account', 'status', '--json'], login: ['login'], logout: ['logout'] },
+    status: ['auth', 'status'], login: ['auth', 'login'], logout: ['auth', 'logout'] },
 };
+
+const legacyAuggie = { status: ['account', 'status', '--json'], login: ['login'], logout: ['logout'] };
+function authCommands(agent, version) {
+  // The 0.x status command is also a safe probe when a binary has no version.
+  return agent === 'auggie' && (!version || version.startsWith('0.')) ? legacyAuggie : AGENTS[agent];
+}
 
 // Never propagate command output: status can contain email addresses and API keys.
 function execute(binary, args, { signal, timeout = 15000 } = {}) {
   return new Promise(resolve => {
-    execFile(binary, args, { signal, timeout, killSignal: 'SIGKILL', maxBuffer: 256 * 1024,
+    const child = execFile(binary, args, { signal, timeout, killSignal: 'SIGKILL', maxBuffer: 256 * 1024,
       env: { ...process.env, AUGMENT_DISABLE_AUTO_UPDATE: '1', NO_COLOR: '1' } },
     (error, stdout, stderr) => resolve({ code: error ? error.code : 0, text: `${stdout}\n${stderr}`, stdout }));
+    child.stdin?.end();
   });
 }
 
@@ -55,10 +62,11 @@ class AgentConnections {
       try { binary = await this.finders[agent](); } catch { /* Missing executable. */ }
       let status = 'missing', version;
       if (binary && !controller.signal.aborted) {
-        const results = await Promise.allSettled([
-          this.run(binary, AGENTS[agent].status, { signal: controller.signal }),
-          this.version(binary, { signal: controller.signal }),
-        ]);
+        const options = { signal: controller.signal };
+        const versionProbe = Promise.resolve(this.version(binary, options)).catch(() => undefined);
+        const commands = authCommands(agent, agent === 'auggie' ? await versionProbe : undefined);
+        if (controller.signal.aborted) return;
+        const results = await Promise.allSettled([this.run(binary, commands.status, options), versionProbe]);
         status = results[0].status === 'fulfilled' ? connectionStatus(agent, results[0].value) : 'unknown';
         version = results[1].status === 'fulfilled' ? results[1].value : undefined;
       }
@@ -69,11 +77,16 @@ class AgentConnections {
     return pending.promise;
   }
   refreshAll(force = false) { return Promise.all(Object.keys(AGENTS).map(agent => this.refresh(agent, force))); }
+  async commandFor(agent, action) {
+    const binary = await this.finders[agent]();
+    const version = agent === 'auggie' ? await this.version(binary) : undefined;
+    return { binary, args: authCommands(agent, version)[action] };
+  }
   async logout(agent) {
     if (!Object.hasOwn(AGENTS, agent)) throw new Error('Unknown agent.');
-    const binary = await this.finders[agent]();
+    const { binary, args } = await this.commandFor(agent, 'logout');
     this.invalidate(agent);
-    const result = await this.run(binary, AGENTS[agent].logout);
+    const result = await this.run(binary, args);
     await this.refresh(agent, true);
     if (result.code !== 0) throw new Error(t('{agent} could not sign out. Check the client installation and try again.', { agent: AGENTS[agent].name }));
   }

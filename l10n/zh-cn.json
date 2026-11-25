@@ -1,5 +1,5 @@
 {
- "Cannot load Augment models. Use “Auggie login” in AI settings.": "无法加载 Augment 模型。请在 AI 设置中使用“Auggie Login”。",
+ "Cannot load Augment models. Sign in to Auggie in AI Settings.": "无法加载 Augment 模型。请在 AI 设置中登录 Auggie。",
  "Auggie returned an invalid model catalog. Update Auggie CLI.": "Auggie 返回的模型目录无效。请更新 Auggie CLI。",
  "Auggie returned no model catalog. Update Auggie CLI.": "Auggie 未返回模型目录。请更新 Auggie CLI。",
  "Auggie returned no available models. Check your Augment account.": "Auggie 未返回可用模型。请检查你的 Augment 账户。",

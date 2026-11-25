@@ -106,7 +106,11 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
       const fs=require('fs'),path=require('path'),dir=path.join(process.cwd(),'.augment');fs.mkdirSync(dir,{recursive:true});
       fs.writeFileSync(path.join(dir,'settings.local.json'),JSON.stringify({mcpServers:{lreview_vscode:JSON.parse(process.argv.at(-1))}}));process.exit(0);
     }
-    console.log(process.argv[2]==='--version'?'0.36.0 (commit abc)':'{}');
+    if (process.argv[2] === '--version') console.log('1.2.2\\ncommit: 6f24c7b3\\nbuilt:  2026-11-17T04:30:33Z');
+    else if (process.argv.slice(2).join(' ') === 'auth status') console.log('Logged in.');
+    else if (process.argv.slice(2).join(' ') === 'model list --json') {
+      console.log(JSON.stringify({defaultModelId:'augment-test',models:[{id:'augment-test',selectableEffortLevels:[]}]}));
+    } else process.exit(2);
   `);
   const lreview = await script(repo.directory, 'lreview', `
     if(process.argv.includes('--version')) { console.log('lreview 0.2.7'); process.exit(0); }
@@ -363,8 +367,7 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   assert.equal(external.at(-1),'https://github.com/lustre-tools/llm_code_and_review_tools');
   await receive({type:'authenticate',agent:'auggie',action:'login'});
   assert.equal(terminals[0].shellPath, auggie);
-  assert.deepEqual(Array.from(terminals[0].shellArgs), ['login']);
-  assert.equal(terminals[0].shellArgs.length, 1, 'no prompt or credential is passed to the terminal');
+  assert.deepEqual(Array.from(terminals[0].shellArgs), ['auth', 'login']);
   terminalClosed(terminals[0]);
   await commands.get('lustreReview.version')();
   assert.deepEqual([executed.at(-1)[0], executed.at(-1)[1].fsPath], ['markdown.showPreview', path.join(extensionPath, 'CHANGELOG.md')], 'the version opens the changelog');
@@ -415,7 +418,7 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   assert.match(document.content, /\[mcp_servers.lreview_vscode\]/);
   assert.match(document.content, /ELECTRON_RUN_AS_NODE/);
   assert.match(document.content, /mcp-runtime/);
-  assert.deepEqual(messages.at(-1).connections.map(entry=>entry.version), ['0.162.0','2.1.301','0.36.0']);
+  assert.deepEqual(messages.at(-1).connections.map(entry=>entry.version), ['0.162.0','2.1.301','1.2.2']);
   const tabsBefore=shown.length;
   await receive({type:'connectMcp',agent:'codex'});
   assert.match(messages.at(-1).mcpSetup.codex.message,/Configured/);

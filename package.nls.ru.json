@@ -35,5 +35,5 @@
   "config.timeout": "Тайм-аут в секундах на коммит.",
   "config.mode": "Какой протокол обзора Lustre запускать.",
   "config.claudePath": "Абсолютный путь к Claude Code. Пусто: исполняемый файл установленного расширения Claude Code, затем PATH.",
-  "config.auggiePath": "Абсолютный путь к официальному Auggie CLI. Требуется auggie login. Пусто: искать в PATH и ~/.local/bin."
+  "config.auggiePath": "Абсолютный путь к официальному Auggie CLI. Требуется auggie auth login. Пусто: искать в PATH и ~/.local/bin."
 }

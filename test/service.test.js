@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { ReviewService, artifact } = require('../src/service');
 const { reports, summarize } = require('../src/history');
-const { repository, script, until } = require('./helpers');
+const { repository, script, temporary, until } = require('./helpers');
 
 async function setup(t, scenario = 'findings') {
   const repo = await repository(t);
@@ -201,6 +201,33 @@ test('failure results include the actual agent diagnostic, also after reload', a
   await reloaded.initialize();
   reloaded.setRepositories([repo.directory]);
   assert.equal(reloaded.get(run.id).results[0].diagnostic, 'Cannot review: codex-code-mode-host is missing.');
+});
+
+test('reloading an Auggie review recovers worker usage alongside previously saved charges', async t => {
+  const root = await temporary(t), id = '11111111-1111-4111-8111-111111111111', sha = 'a'.repeat(40);
+  const other = 'b'.repeat(40);
+  const directory = path.join(root, id), artifacts = path.join(directory, 'artifacts');
+  const service = new ReviewService({ storage: root });
+  service.setRepositories([root]);
+  await fs.mkdir(artifacts, { recursive: true });
+  await fs.writeFile(path.join(directory, 'run.json'), JSON.stringify({
+    id, repository: service.repositories[0].id, agent: 'auggie', status: 'completed', commits: [sha, other],
+    usage: { tokens: null, costUsd: 0.75, byCommit: { [other]: { costUsd: 0.75 } } },
+  }));
+  await fs.writeFile(path.join(artifacts, 'summary.json'), JSON.stringify({ one: { local: true, sha, log: 'one.log' } }));
+  await fs.writeFile(path.join(artifacts, 'one.log'), [
+    { type: 'message_end', message: { role: 'assistant', requestId: 'r1', usage: { totalTokens: 17 } } },
+    { type: 'billing', usage_unit: 'credits', total_cost: 42 },
+  ].map(event => JSON.stringify(event) + '\n').join(''));
+  await service.initialize();
+  const { usage } = service.get(id);
+  assert.equal(usage.tokens, 17);
+  assert.equal(usage.tokensPartial, true);
+  assert.equal(usage.credits, 42);
+  assert.equal(usage.costUsd, 0.75);
+  assert.equal(usage.byCommit[sha].tokens, 17);
+  assert.equal(usage.byCommit[sha].credits, 42);
+  assert.equal(usage.byCommit[other].costUsd, 0.75);
 });
 
 test('invalid refs/models/efforts and closed repositories never spawn reviewers', async t => {

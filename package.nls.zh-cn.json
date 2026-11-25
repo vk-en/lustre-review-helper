@@ -35,5 +35,5 @@
   "config.timeout": "每个提交的超时时间（秒）。",
   "config.mode": "要运行的 Lustre 审查协议。",
   "config.claudePath": "Claude Code 的绝对路径。留空：使用已安装的 Claude Code 扩展中的可执行文件，然后查找 PATH。",
-  "config.auggiePath": "官方 Auggie CLI 的绝对路径。需要先执行 auggie login。留空：查找 PATH 和 ~/.local/bin。"
+  "config.auggiePath": "官方 Auggie CLI 的绝对路径。需要先执行 auggie auth login。留空：查找 PATH 和 ~/.local/bin。"
 }

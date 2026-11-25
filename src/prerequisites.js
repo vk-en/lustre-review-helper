@@ -7,7 +7,9 @@ function cliVersion(binary, { timeout = 5000, signal } = {}) {
   return new Promise(resolve => {
     execFile(binary, ['--version'], { timeout, signal, killSignal: 'SIGKILL', maxBuffer: 16384,
       env: { ...process.env, NO_COLOR: '1', AUGMENT_DISABLE_AUTO_UPDATE: '1' } }, (error, stdout) => {
-      const version = !error && stdout.trim().match(/^(?:(?:lreview|gerrit(?:-cli)?|gc|codex(?:-cli)?|claude(?: code)?|auggie)(?:,?\s+version)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)(?:\s+\([^\r\n]*\))?$/i)?.[1];
+      // Auggie 1.x prints its commit and build date after the version line.
+      const firstLine = stdout.trim().split(/\r?\n/, 1)[0];
+      const version = !error && firstLine.match(/^(?:(?:lreview|gerrit(?:-cli)?|gc|codex(?:-cli)?|claude(?: code)?|auggie)(?:,?\s+version)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)(?:\s+\([^\r\n]*\))?$/i)?.[1];
       resolve(version || undefined);
     });
   });

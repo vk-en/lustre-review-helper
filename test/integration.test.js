@@ -15,8 +15,12 @@ for (const agent of ['codex', 'claude', 'auggie']) test(`MCP → service → ins
   const second = await repo.commit('second\n', 'LU-2: second');
   await fs.writeFile(path.join(repo.directory, 'file.c'), 'keep my local changes\n');
   const prompts = path.join(repo.directory, 'prompts');
-  await fs.mkdir(prompts);
-  for (const name of ['review-core.md', 'gerrit-review.md']) await fs.writeFile(path.join(prompts, name), '# Test protocol\n');
+  await fs.mkdir(path.join(prompts, 'subsystem'), { recursive: true });
+  // lreview preloads these parts of the full protocol for Codex and Claude.
+  for (const name of ['review-core.md', 'gerrit-review.md', 'technical-patterns.md', 'lustre-commit-message.md',
+    'lustre-style.md', 'subsystem/build.md', 'subsystem/subsystem.md']) {
+    await fs.writeFile(path.join(prompts, name), '# Test protocol\n');
+  }
   await script(repo.directory, 'codex-code-mode-host', 'console.log("helper ready");');
   const binary = await script(repo.directory, 'fake-agent', `
     const fs=require('fs'), cp=require('child_process'), path=require('path');
@@ -26,12 +30,19 @@ for (const agent of ['codex', 'claude', 'auggie']) test(`MCP → service → ins
       if(!process.argv.includes('mcp_servers.lreview_vscode={command="false",enabled=false}')) process.exit(10);
       cp.execFileSync(path.join(path.dirname(process.argv[1]), 'codex-code-mode-host'));
     } else if(agent==='claude' && !process.argv.includes('--disallowedTools=mcp__lreview_vscode__*')) process.exit(11);
-    if(agent==='auggie' && (!process.argv.includes('--show-cost') || !process.argv.includes('--reasoning-effort'))) process.exit(12);
+    if (agent === 'auggie') {
+      require('assert/strict').deepEqual(process.argv.slice(2, -1),
+        ['--print','--mode','json','--show-cost','--no-session','--model','opus','--thinking','medium']);
+    }
     const sha=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
     const subject=cp.execFileSync('git',['show','-s','--format=%s','HEAD'],{encoding:'utf8'}).trim();
     fs.writeFileSync('gerrit-review.json',JSON.stringify({message:'Verified '+sha,comments:{'file.c':[{line:1,message:'Test finding from real worktree'}]}}));
     fs.writeFileSync('review-metadata.json',JSON.stringify({author:'Test Author',sha,subject,'issues-found':1,'issue-severity-score':'low','issue-severity-explanation':'Test'}));
-    console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:10,output_tokens:5}}));
+    if (agent === 'auggie') {
+      console.log(JSON.stringify({type:'message_end',message:{role:'assistant',requestId:sha,usage:{totalTokens:15}}}));
+      const usd = subject.includes('LU-1');
+      console.log(JSON.stringify({type:'billing',usage_unit:usd?'usd':'credits',total_cost:usd?0.09:42}));
+    } else console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:10,output_tokens:5}}));
   `);
   const service = new ReviewService({ storage: path.join(repo.directory, 'runs'),
     settings: async () => ({ lreview: process.env.LREVIEW_TEST_EXECUTABLE, [agent]: binary, promptsDir: prompts, jobs: 2, timeout: 60, mode: 'full' }),
@@ -43,12 +54,18 @@ for (const agent of ['codex', 'claude', 'auggie']) test(`MCP → service → ins
   t.after(async () => { await bridge.dispose(); await service.dispose(); });
   const run = await bridgeRequest(connection, 'start_review', { commits: [first, second], agent, effort: 'medium' });
   const done = await until(async () => {
-    const current = await bridgeRequest(connection, 'get_review', { id: run.id });
+    const current = await bridgeRequest(connection, 'get_review', { id: run.id, include_log: true });
     return !['running', 'cancelling'].includes(current.status) && current;
   }, 30000);
   assert.equal(done.status, 'completed', done.log + '\n' + done.error);
   assert.deepEqual(done.results.map(r => r.sha), [first, second]);
   assert.ok(done.results.every(r => r.comments.length === 1 && r.message.includes(r.sha)));
+  if (agent === 'auggie') {
+    assert.equal(done.usage.tokens, 30);
+    assert.equal(done.usage.byCommit[first].costUsd, 0.09);
+    assert.equal(done.usage.byCommit[second].credits, 42);
+    assert.equal(done.usage.byCommit[second].costUsd, null);
+  }
   const reports = await service.reportFiles(run.id);
   assert.equal(reports.length, 2);
   const selected = await service.reportFiles(run.id, first);

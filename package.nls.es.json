@@ -35,5 +35,5 @@
   "config.timeout": "Tiempo de espera en segundos por commit.",
   "config.mode": "Protocolo de revisión de Lustre que se ejecuta.",
   "config.claudePath": "Ruta absoluta a Claude Code. Vacío: usar el binario de la extensión de Claude Code instalada y después el PATH.",
-  "config.auggiePath": "Ruta absoluta a la Auggie CLI oficial. Requiere auggie login. Vacío: buscar en el PATH y en ~/.local/bin."
+  "config.auggiePath": "Ruta absoluta a la Auggie CLI oficial. Requiere auggie auth login. Vacío: buscar en el PATH y en ~/.local/bin."
 }

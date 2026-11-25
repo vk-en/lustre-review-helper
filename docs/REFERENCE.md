@@ -29,7 +29,8 @@ use for self-review.
    agent's binary shipped with `openai.chatgpt` or `Anthropic.claude-code`,
    then on PATH. Only the agent you select needs to be installed.
    For **Augment**, install the official [Auggie CLI](https://docs.augmentcode.com/cli/setup-auggie/install-auggie-cli)
-   (`npm install -g @augmentcode/auggie`, Node.js 20+) and run `auggie login`.
+   (`npm install -g @augmentcode/auggie`) and run `auggie auth login`.
+   Auggie 1.2 requires the `lreview` adapter from [PR #40](https://github.com/lustre-tools/llm_code_and_review_tools/pull/40) (0.2.67).
    An Augment IDE login alone does not configure this CLI integration.
 
 3. Install **Lustre Review Helper** from the Visual Studio Marketplace: search
@@ -555,8 +556,9 @@ Codex's [`app-server` / `model/list`](https://developers.openai.com/codex/app-se
 or Claude Code's streaming SDK initialization catalog. Claude discovery
 sends only an initialization control request, with hooks and MCP disabled;
 it sends no user prompt. Older Claude clients without a catalog need updating.
-Augment uses the official `auggie models list --json` catalog and `auggie --print`
-backend. It does not access the Augment extension's private authentication
+Augment uses the official `auggie model list --json` catalog and `auggie --print`
+backend. The reasoning picker offers the model's selectable levels that
+`lreview --effort` accepts. It does not access the Augment extension's private authentication
 storage. Use **AI Settings → Auggie → Sign in** to authenticate the CLI.
 It does not hard-code a model list or read another extension's private UI
 state, and it does not mirror the model currently selected in an agent chat.
@@ -565,7 +567,8 @@ Providers exposed by VS Code's separate Language Model API are not review
 backends in this version.
 
 Connection checks use `codex login status`, `claude auth status --json`, and
-`auggie account status --json`. They are asynchronous, bounded, and never
+`auggie auth status`. For Auggie 0.x the extension uses `auggie account status --json`
+and the top-level `login` and `logout` commands. The checks are asynchronous, bounded, and never
 start inference. Raw status output and credentials are not shown or stored.
 Checks refresh while settings are visible, after returning from the browser,
 and during sign-in. An unavailable check is shown as unknown, not signed out.
@@ -587,13 +590,12 @@ usage is deduplicated by message id. Cached Codex tokens are not added twice.
 Missing usage or prices are shown as unavailable, never as zero. A partial
 counter is marked `≥`.
 
-- **Augment:** read only the session id identified in that review worker's log,
-  under `~/.augment/sessions`. Its token usage and billing metadata update
-  throughout the review. Deduplicate requests and billing transactions;
-  retain prior totals across history compaction. Child-agent tokens and compacted
-  history that cannot be fully accounted for make the count partial.
-  Final billing remains authoritative; credits are never converted to USD.
-  Saved reviews with missing tokens are enriched when their session still exists.
+- **Augment** runs with `--no-session` on 1.2. Completed assistant messages
+  in the worker log supply token usage and billing transactions. The final
+  `billing` event supplies the total in USD or Augment credits, including any
+  child-agent charges. Missing message usage and child-agent charges mark
+  the token count as partial. For 0.x logs, the extension reads the matching
+  worker's saved session in `~/.augment/sessions`.
 - **Claude:** receive its [OpenTelemetry cost counters](https://code.claude.com/docs/en/monitoring-usage)
   once per second through a temporary localhost HTTP endpoint with a random
   path. Only review children receive this configuration; the collector is

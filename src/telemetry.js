@@ -16,6 +16,34 @@ function tokens(usage, claude = false) {
     ['input_tokens', 'output_tokens']).map(key => number(usage[key])));
 }
 
+function recordAugmentBill(worker, bill) {
+  if (!bill?.transaction_id) return;
+  const cost = bill.usage_unit === 2 && typeof bill.cost_usd === 'string' && bill.cost_usd.trim()
+    ? number(Number(bill.cost_usd)) : null;
+  const credits = bill.usage_unit === 1 ? number(bill.credits_consumed) : null;
+  if (cost !== null || credits !== null) worker.augmentBills.set(bill.transaction_id, { cost, credits });
+}
+
+function updateAugmentTotals(worker, subCost = 0, subCredits = 0) {
+  const requests = [...worker.augmentRequests.values()];
+  worker.tokens = sum(requests) ?? worker.tokens;
+  worker.augmentMissingUsage = requests.includes(null);
+  const bills = [...worker.augmentBills.values()];
+  const cost = sum(bills.map(b => b.cost)), credits = sum(bills.map(b => b.credits));
+  if (cost !== null) worker.costUsd = cost + subCost;
+  if (credits !== null) worker.credits = credits + subCredits;
+}
+
+function augmentMessage(worker, message) {
+  const usage = message.usage;
+  const total = number(usage?.totalTokens) ??
+    sum(['input', 'output', 'cacheRead', 'cacheWrite'].map(key => number(usage?.[key])));
+  const id = message.requestId ?? message.responseId ?? message.timestamp ?? Symbol();
+  if (total !== null || !worker.augmentRequests.has(id)) worker.augmentRequests.set(id, total);
+  recordAugmentBill(worker, message.billingMetadata);
+  updateAugmentTotals(worker);
+}
+
 class JsonlReader {
   constructor(consume, consumeText) { this.consume = consume; this.consumeText = consumeText; this.offset = 0; this.pending = Buffer.alloc(0); this.discarding = false; }
   async read(file) {
@@ -77,6 +105,17 @@ class LiveUsage {
         worker.tokens = sum([...worker.messages.values()]);
       }
       if (event.type === 'turn.completed') worker.tokens = tokens(event.usage);
+      // Auggie 1.x repeats messages in turn_end and agent_end. Only the
+      // completed assistant message contributes usage for this request.
+      if (this.run.agent === 'auggie' && event.type === 'message_end' && event.message?.role === 'assistant') {
+        augmentMessage(worker, event.message);
+      }
+      if (this.run.agent === 'auggie' && event.type === 'billing') {
+        const total = number(event.total_cost);
+        if (total !== null && event.usage_unit === 'usd') worker.finalCostUsd = total;
+        if (total !== null && event.usage_unit === 'credits') worker.finalCredits = total;
+        if (number(event.sub_agent_cost) > 0) worker.augmentPartial = true;
+      }
       if (event.type === 'result') {
         worker.tokens = tokens(event.usage, true) ?? worker.tokens;
         worker.costUsd = number(event.total_cost_usd) ?? worker.costUsd;
@@ -134,19 +173,10 @@ class LiveUsage {
           const value = tokens(node.token_usage, true);
           if (value !== null) worker.augmentRequests.set(exchange.request_id, value);
         }
-        const bill = node.type === 9 && node.billing_metadata;
-        if (bill?.transaction_id) {
-          const cost = bill.usage_unit === 2 && typeof bill.cost_usd === 'string' && bill.cost_usd.trim() ? number(Number(bill.cost_usd)) : null;
-          worker.augmentBills.set(bill.transaction_id, { cost, credits: bill.usage_unit === 1 ? number(bill.credits_consumed) : null });
-        }
+        if (node.type === 9) recordAugmentBill(worker, node.billing_metadata);
       }
     }
-    worker.tokens = sum([...worker.augmentRequests.values()]) ?? worker.tokens;
-    const bills = [...worker.augmentBills.values()];
-    worker.costUsd = sum(bills.map(b => b.cost)) ?? worker.costUsd;
-    worker.credits = sum(bills.map(b => b.credits)) ?? worker.credits;
-    if (worker.costUsd !== null) worker.costUsd += number(session.subAgentCostUsd) || 0;
-    if (worker.credits !== null) worker.credits += number(session.subAgentCreditsUsed) || 0;
+    updateAugmentTotals(worker, number(session.subAgentCostUsd) ?? 0, number(session.subAgentCreditsUsed) ?? 0);
     worker.augmentPartial = (session.subAgentCostUsd || session.subAgentCreditsUsed || 0) > 0 ||
       session.chatHistory.some(entry => entry.exchange?.request_nodes?.some(node => node.history_summary_node));
     worker.augmentMtime = stat.mtimeMs;
@@ -170,7 +200,7 @@ class LiveUsage {
     return undefined;
   }
 
-  async poll() {
+  async poll({ final = false } = {}) {
     const entries = await fs.readdir(this.directory, { withFileTypes: true }).catch(() => []);
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith('.log')) continue;
@@ -178,7 +208,14 @@ class LiveUsage {
       if (!worker) { worker = this.worker(); this.workers.set(entry.name, worker); }
       try {
         const previousLimits = worker.limits;
-        const stat = await worker.reader.read(path.join(this.directory, entry.name));
+        const file = path.join(this.directory, entry.name);
+        let stat = await worker.reader.read(file);
+        if (this.run.agent === 'auggie') {
+          // The final billing event can follow a large agent_end snapshot.
+          const end = stat.size;
+          while (final && worker.reader.offset < Math.min(end, stat.size)) stat = await worker.reader.read(file);
+          worker.augmentBacklog = worker.reader.offset < stat.size;
+        }
         if (worker.limits && worker.limits !== previousLimits) worker.limits.observedAt = new Date(stat.mtimeMs).toISOString();
         if (stat.size) this.lastActivityAt = Math.max(this.lastActivityAt || 0, stat.mtimeMs);
         if (this.run.agent === 'codex') {
@@ -207,8 +244,8 @@ class LiveUsage {
       return { sha: completed?.target, tokens: number(completed?.tokens) ?? w.tokens ?? w.sessionTokens,
         cost: number(completed?.cost_usd) ?? w.finalCostUsd ?? w.costUsd ?? this.claudeMetrics?.cost(w.sessionId) ?? null,
         estimated: w.estimatedCostUsd, credits: w.finalCredits ?? w.credits,
-        tokensPartial: !!w.augmentPartial || (w.tokens === null && !!w.sessionBacklog),
-        costPartial: !!w.estimateIncomplete || !!w.sessionBacklog };
+        tokensPartial: !!w.augmentPartial || !!w.augmentMissingUsage || !!w.augmentBacklog || (w.tokens === null && !!w.sessionBacklog),
+        costPartial: !!w.estimateIncomplete || !!w.sessionBacklog || !!w.augmentBacklog };
     });
     for (const entry of done) if (!this.workers.has(entry.log)) measurements.push({sha:entry.target,tokens:number(entry.tokens), cost:number(entry.cost_usd), credits:null});
     const knownTokens = measurements.filter(m => m.tokens !== null).length;

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Support Auggie 1.2 sign-in, model selection and usage reporting with
+  the updated `lreview` adapter. Reviews show token usage and billed USD or
+  credits directly from the worker log. Auggie 0.x retains its account and
+  session integration with the matching older adapter.
+
 ## 0.1.0
 
 The first release: AI review of Lustre patches in the VS Code sidebar, through

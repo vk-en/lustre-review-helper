@@ -39,7 +39,32 @@ test('probes and logout use official argument arrays and never return raw creden
   await connections.logout('codex');
   assert.equal(connections.get('codex').status, 'disconnected');
   assert.deepEqual(AGENTS.claude.logout, ['auth', 'logout']);
-  assert.deepEqual(AGENTS.auggie.status, ['account', 'status', '--json']);
+});
+
+test('Auggie uses the account commands of the installed CLI for status, sign-in and sign-out', async () => {
+  for (const [version, status, login, logout] of [
+    ['1.2.2', ['auth', 'status'], ['auth', 'login'], ['auth', 'logout']],
+    ['0.36.0', ['account', 'status', '--json'], ['login'], ['logout']],
+  ]) {
+    let signedIn = true;
+    const calls = [];
+    const binary = '/test/auggie';
+    const connections = new AgentConnections({ auggie: async () => binary }, () => {}, {
+      version: async () => version,
+      run: async (_binary, args) => {
+        calls.push(args);
+        if (args.includes('logout')) { signedIn = false; return { code: 0 }; }
+        return { code: signedIn ? 0 : 1, text: signedIn ? 'Logged in.' : 'Not logged in.' };
+      },
+    });
+    await connections.refresh('auggie');
+    assert.equal(connections.get('auggie').status, 'connected');
+    assert.deepEqual(await connections.commandFor('auggie', 'login'), { binary, args: login });
+    await connections.logout('auggie');
+    assert.equal(connections.get('auggie').status, 'disconnected');
+    assert.deepEqual(calls, [status, logout, status]);
+    connections.dispose();
+  }
 });
 
 test('probes coalesce, late replies cannot overwrite new credentials, and failed logout is rechecked', async t => {

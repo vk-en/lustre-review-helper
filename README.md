@@ -148,7 +148,10 @@ This installs `lreview`, `gerrit-cli`, `gerrit-dashboard` and the review prompts
 | --- | --- | --- |
 | **Codex** | the Codex VS Code extension or CLI | `codex login`, or the **Sign in** button |
 | **Claude Code** | the Claude Code VS Code extension or CLI | `claude auth login`, or **Sign in** |
-| **Augment** | the [Auggie CLI](https://docs.augmentcode.com/cli/setup-auggie/install-auggie-cli): `npm install -g @augmentcode/auggie` | `auggie login`, or **Sign in** |
+| **Augment** | the [Auggie CLI](https://docs.augmentcode.com/cli/setup-auggie/install-auggie-cli): `npm install -g @augmentcode/auggie` | `auggie auth login`, or **Sign in** |
+
+Auggie 1.2 needs the Auggie 1.2 adapter in `lreview` ([PR #40](https://github.com/lustre-tools/llm_code_and_review_tools/pull/40), version 0.2.67).
+For an existing Auggie 0.x installation, use the corresponding older `lreview` adapter.
 
 **4. Review.** Open your Lustre checkout, trust the workspace, and click the
 **Lustre Review Helper** icon in the Activity Bar. Tick a commit and press

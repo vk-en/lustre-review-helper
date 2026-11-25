@@ -1058,8 +1058,9 @@ async function activate(context) {
         if (connections.get(target).status === 'connected') notice = t('{agent} still reports an authenticated account. Check credentials supplied by your environment or managed configuration.', { agent: AGENTS[target].name });
       }
       else {
+        const { binary, args } = await connections.commandFor(target, 'login');
         const terminal = vscode.window.createTerminal({ name: t('{agent} sign in', { agent: AGENTS[target].name }),
-          shellPath: await finders[target](), shellArgs: AGENTS[target].login,
+          shellPath: binary, shellArgs: args,
           env: { AUGMENT_DISABLE_AUTO_UPDATE: '1' } });
         loginTerminals.set(target, terminal);
         context.subscriptions.push(terminal); terminal.show();
