@@ -52,7 +52,7 @@ const packaged = new Set(run(['ls', '--no-dependencies']).split('\n').map(line =
 // translations, and the files package.json names (main, icons).
 const needed = new Set(['package.json', 'README.md', 'CHANGELOG.md', 'LICENSE',
   ...list('.', '.json').filter(file => /^\.\/package\.nls(\.[\w-]+)?\.json$/.test(file)).map(file => file.slice(2)),
-  ...list('l10n', '.json')]);
+  ...list('l10n', '.json'), 'src/lreview-config.py']);
 for (const file of list('src', '.js')) {
   const source = fs.readFileSync(path.join(root, file), 'utf8');
   for (const [, request] of source.matchAll(/require\('(\.{1,2}\/[^']+)'\)/g)) {

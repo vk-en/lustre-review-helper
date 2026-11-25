@@ -3,11 +3,12 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { EventEmitter } = require('node:events');
 const { resolveCommit, listCommits, readFileAtCommit, git } = require('./git');
 const { BatchProgress } = require('./progress');
-const { createAgentLauncher } = require('./codex');
+const { createAgentLauncher, executable } = require('./codex');
 const { LiveUsage } = require('./telemetry');
 const { startClaudeMetrics } = require('./claude-metrics');
 const { subjects: reviewSubjects } = require('./history');
@@ -114,6 +115,18 @@ function reviewArguments(options, runDirectory) {
   // A re-review after fixing findings looks only at what changed since then.
   if (options.since && !options.gerritPatches?.length) args.push('--since', options.since);
   return [...args, ...(options.gerritPatches?.length ? options.gerritPatches.map(p => p.url) : options.commits)];
+}
+
+// lreview has --post and also reads it from TOML, with no --no-post switch.
+// Use its own Python environment for a snapshot that preserves other options.
+async function manualReviewConfig(binary, file, cwd, env) {
+  const sibling = path.join(path.dirname(await fs.realpath(binary)), 'python3');
+  const python = await fs.access(sibling, fs.constants.X_OK).then(() => sibling,
+    () => executable('python3.11').catch(() => 'python3'));
+  const { stdout } = await promisify(execFile)(python, ['-I', path.join(__dirname, 'lreview-config.py')], {
+    cwd, env, encoding: 'buffer', timeout: 10000, maxBuffer: 4 * 1024 * 1024,
+  });
+  await fs.writeFile(file, stdout, { mode: 0o600, flag: 'wx' });
 }
 
 async function readFindings(directory, entry) {
@@ -382,6 +395,7 @@ class ReviewService extends EventEmitter {
       };
       const execute = async () => {
         let finalStatus;
+        const configFile = path.join(directory, 'lreview-run.toml');
         try {
           run.exitCode = 0;
           // lreview's --local applies to the entire invocation. Keep local and
@@ -391,6 +405,11 @@ class ReviewService extends EventEmitter {
             if (run.status === 'cancelling') break;
             log(`\nReviewing ${batch.gerritPatches ? `${batch.gerritPatches.length} Gerrit patch(es)` : `${batch.commits.length} local commit(s)`}…\n`);
             const args = reviewArguments({ ...settings, ...batch, repo: repo.path, agent, model: model.id, effort, mode }, directory);
+            if (batch.gerritPatches) {
+              await manualReviewConfig(settings.lreview, configFile, repo.path, processOptions.env);
+              processOptions.env.LREVIEW_CONFIG = configFile;
+              if (run.status === 'cancelling') break;
+            }
             const code = await new Promise((resolve, reject) => {
               let spawnError;
               const child = this.spawnProcess(settings.lreview, args, processOptions);
@@ -419,6 +438,7 @@ class ReviewService extends EventEmitter {
           run.error = error.message;
         } finally {
           clearInterval(usageTimer);
+          if (patches.length) await fs.unlink(configFile).catch(() => {});
           await sampling;
           await sample(true);
           await metrics?.dispose();

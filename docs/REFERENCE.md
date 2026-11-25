@@ -261,8 +261,9 @@ host. The existing lreview backend depends on POSIX process groups and
   selected, using the local repository chosen in Local commits as the Git
   object store. Local commits run first, then Gerrit patches, with a shared
   progress counter, usage totals and Cancel action. Each item gets its own
-  report and history entry. Reviewing does not publish results; publication is a
-  separate action in Reports & History. Both preparation lists clear after the batch finishes.
+  report and history entry. Use **Publish to Gerrit** in Reports & History to
+  send a review. **Start review** keeps publication manual even when the
+  lreview configuration sets `post = true`. Both preparation lists clear after the batch finishes.
   While a review runs, commit checkboxes, Select all, Clear, the repository
   picker, Add commit and patch removal are disabled: a running batch cannot
   take more targets, and its end would otherwise drop them.

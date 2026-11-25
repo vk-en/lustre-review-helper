@@ -19,6 +19,10 @@ async function setup(t, scenario = 'findings') {
     fs.writeFileSync(${JSON.stringify(path.join(repo.directory, 'invocation.json'))},JSON.stringify({args,env:{PATH:process.env.PATH,LREVIEW_EFFORT:process.env.LREVIEW_EFFORT,LREVIEW_VSCODE_WORKER:process.env.LREVIEW_VSCODE_WORKER}}));
     fs.appendFileSync(${JSON.stringify(path.join(repo.directory, 'invocations.jsonl'))},JSON.stringify(args)+'\\n');
     const scenario=${JSON.stringify(scenario)};
+    if (scenario === 'manual-post') {
+      const config = process.env.LREVIEW_CONFIG;
+      fs.writeFileSync('worker-config.json', JSON.stringify({ config, text: fs.readFileSync(config, 'utf8'), mode: fs.statSync(config).mode & 0o777 }));
+    }
     const remote=args.filter(a=>a.startsWith('https://review.whamcloud.com/'));
     if(remote.length && scenario==='gerrit-fail'){console.log('Gerrit authentication failed');process.exit(1);}
     if(scenario==='wait'||scenario==='wait-gerrit'&&remote.length) {
@@ -107,6 +111,29 @@ test('selected commits are pinned, run with real argv, and returned to both clie
 });
 
 const remotePatch = {number:64086,patchset:2,project:'fs/lustre-release',url:'https://review.whamcloud.com/64086/2',subject:'LU-99: remote patch'};
+
+test('Gerrit workers override implicit posting while preserving the other lreview defaults', async t => {
+  const { repo, service } = await setup(t, 'manual-post');
+  const original = process.env.LREVIEW_CONFIG;
+  t.after(() => { if (original === undefined) delete process.env.LREVIEW_CONFIG; else process.env.LREVIEW_CONFIG = original; });
+  process.env.LREVIEW_CONFIG = 'my settings.toml'; // lreview resolves it from the worker cwd.
+  const file = path.join(repo.directory, process.env.LREVIEW_CONFIG);
+  for (const post of ['post = true\n[run]', '[run]\n"post" = true']) {
+    const source = `prefix = "Rêview 🚀"\n${post}\nstall-timeout = 47\nagent-arg = ["post = true", "kept"]\n`;
+    await fs.writeFile(file, source);
+    const run = await service.start({ gerritPatches: [remotePatch] });
+    await until(() => service.get(run.id).status !== 'running');
+    assert.equal(service.get(run.id).status, 'completed', service.get(run.id).error);
+    const worker = JSON.parse(await fs.readFile(path.join(repo.directory, 'worker-config.json')));
+    assert.match(worker.text, /"run" = \{ [^\n]*"post" = false/);
+    assert.match(worker.text, /"prefix" = "Rêview 🚀"/);
+    assert.match(worker.text, /"stall-timeout" = 47/);
+    assert.match(worker.text, /"agent-arg" = \["post = true", "kept"\]/);
+    assert.equal(worker.mode, 0o600);
+    assert.equal(await fs.readFile(file, 'utf8'), source);
+    await assert.rejects(fs.access(worker.config), { code: 'ENOENT' });
+  }
+});
 
 test('review start rechecks the project before spawning any reviewer', async t => {
   const {repo,service}=await setup(t);
