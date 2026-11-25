@@ -1,4 +1,4 @@
-"""Write the Gerrit worker's private lreview config to stdout."""
+"""Write the review worker's private lreview config to stdout."""
 
 import json
 import os
@@ -24,14 +24,24 @@ def main():
         raw = path.read_bytes()
     except FileNotFoundError:
         return
-    # Only a TOML boolean can enable posting. Keep the original file verbatim
-    # when there is nothing to override, including lreview's own diagnostics.
-    if b"true" in raw:
+    if raw.strip():
         import tomllib
         config = tomllib.loads(raw.decode("utf-8"))
         run = config.get("run", {})
+        changed = False
         if isinstance(run, dict) and run.get("post", config.get("post")) is True:
-            config["run"] = {**run, "post": False}
+            run["post"] = False
+            config["run"] = run
+            changed = True
+        # A lens model or effort is itself invalid without --lenses. Both
+        # spellings are accepted by lreview. Other subcommands keep their tables.
+        if "--lenses" not in sys.argv and isinstance(run, dict):
+            for table in (config, run):
+                for key in list(table):
+                    if key.replace("-", "_") in {"lenses", "lens_model", "lens_effort"}:
+                        del table[key]
+                        changed = True
+        if changed:
             raw = "".join(f"{toml_value(k)} = {toml_value(v)}\n" for k, v in config.items()).encode("utf-8")
     sys.stdout.buffer.write(raw)
 

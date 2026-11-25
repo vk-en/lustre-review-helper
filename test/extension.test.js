@@ -762,9 +762,14 @@ test('extension activation wires accordion, commit selection, settings, and MCP 
   const previousMode = process.env.GERRIT_CLI_MODE;
   t.after(() => { if (previousMode === undefined) delete process.env.GERRIT_CLI_MODE; else process.env.GERRIT_CLI_MODE = previousMode; });
   process.env.GERRIT_CLI_MODE = 'drafts';
+  await receive({type:'mode',value:'full'});
+  await receive({type:'lenses',value:true});
+  assert.equal(messages.at(-1).lenses,true);
   await receive({type:'addGerritPatch',url:'https://review.whamcloud.com/64086/2'});
   await receive({type:'run'});
   const draftId = messages.at(-1).statsRun.id;
+  assert.equal(reset.getReview(draftId).lenses,true);
+  assert.equal(messages.at(-1).lenses,false,'the next run needs a fresh opt-in');
   await until(() => messages.at(-1).gerritRun?.id === draftId && messages.at(-1).gerritRun.publication.draftsOnly);
   await receive({type:'publishGerrit',id:draftId});
   assert.equal(messages.at(-1).gerritRun.publication.status, 'drafted');

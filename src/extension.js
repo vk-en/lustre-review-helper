@@ -166,6 +166,7 @@ async function activate(context) {
   let modelSequence = 0;
   let loadingModels = false;
   let mode = context.workspaceState.get('mode', config().get('mode'));
+  let lenses = false;
   let notice = '';
   let selectedRun;
   let selectedGerritRun;
@@ -375,7 +376,7 @@ async function activate(context) {
       const next = connections.all().find(entry => entry.status === 'connected');
       if (next) {
         ++modelSequence; loadingModels = false;
-        agent = next.agent; model = savedModel(); effort = savedEffort();
+        agent = next.agent; model = savedModel(); effort = savedEffort(); lenses = false;
         void context.workspaceState.update('agent', agent);
       }
     }
@@ -581,7 +582,7 @@ async function activate(context) {
     return { type: 'state', repository: selectedRepository?.path, repositoryId: selectedRepository?.id, branch,
       section, commits: shown().map(c => ({ ...c, selected: selected.has(c.sha), merged: merged.has(c.sha), gerrit: links.view(projectInfo?.project, c) })),
       totalCommits: commits.length, mergedCount: commits.filter(c => merged.has(c.sha)).length, mergedBase, hideMerged,
-      selectedCommits: shown().filter(c => selected.has(c.sha)), selected: checked().length, agent, model, effort, mode, notice, loadingModels,
+      selectedCommits: shown().filter(c => selected.has(c.sha)), selected: checked().length, agent, model, effort, mode, lenses, notice, loadingModels,
       commitLimit: config().get('commitLimit', 30), autoOpenReports,
       usageStatistics: statistics.rows(),
       connections: connections.all().map(entry => ({ ...entry, pending: authActions.has(entry.agent) })),
@@ -729,7 +730,8 @@ async function activate(context) {
       if (!model) await chooseModel();
       if (!model) return;
       const review = await service.start({ repository: selectedRepository.id, commits: checked(),
-        gerritPatches: gerritPatches.get().items, agent, model: model.id, effort, mode });
+        gerritPatches: gerritPatches.get().items, agent, model: model.id, effort, mode, lenses });
+      lenses = false;
       showReview(review);
       notice = '';
     } catch (error) { reviewError = true; throw error; }
@@ -1160,7 +1162,7 @@ async function activate(context) {
           case 'agent':
             if (!activeRun() && !starting && connections.get(message.value).status === 'connected' && message.value !== agent) {
               ++modelSequence; loadingModels = false; notice = '';
-              agent = message.value; model = savedModel(); effort = savedEffort();
+              agent = message.value; model = savedModel(); effort = savedEffort(); lenses = false;
               await context.workspaceState.update('agent', agent); update();
               refreshLimits();
               if (!model) await chooseModel();
@@ -1285,7 +1287,13 @@ async function activate(context) {
             await refresh();
             break;
           }
-          case 'mode': if (['full', 'light'].includes(message.value)) { mode = message.value; await context.workspaceState.update('mode', mode); update(); } break;
+          case 'lenses':
+            if (!activeRun() && !starting && agent === 'claude' && mode === 'full') { lenses = message.value === true; update(); }
+            break;
+          case 'mode': if (['full', 'light'].includes(message.value)) {
+            mode = message.value; if (mode !== 'full') lenses = false;
+            await context.workspaceState.update('mode', mode); update();
+          } break;
           case 'effort': if (message.value === '' || model?.efforts.includes(message.value)) { effort = message.value; await context.workspaceState.update(`effort:${agent}`, effort); update(); } break;
           case 'history': if (visibleReports(selectedRepository?.id).some(r => r.id === message.id && !r.gerritPatch)) { selectedRun = message.id; historyTab = 'local'; update(); } break;
           case 'gerritHistory': if (visibleReports(selectedRepository?.id).some(r => r.id === message.id && r.gerritPatch)) { selectedGerritRun = message.id; historyTab = 'gerrit'; update(); } break;
@@ -1371,7 +1379,7 @@ async function activate(context) {
           connections.invalidate(); void connections.refreshAll();
           accountLimits.invalidate(); refreshLimits();
         }
-        if (event.affectsConfiguration('lustreReview.mode')) mode = config().get('mode');
+        if (event.affectsConfiguration('lustreReview.mode')) { mode = config().get('mode'); if (mode !== 'full') lenses = false; }
         void guarded(refresh)();
       }
     }), { dispose: () => { for (const d of repoSubscriptions.values()) d.dispose(); clearTimeout(timer); } });

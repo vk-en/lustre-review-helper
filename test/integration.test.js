@@ -7,7 +7,7 @@ const { ReviewService } = require('../src/service');
 const { startBridge, bridgeRequest } = require('../src/bridge');
 const { repository, script, until } = require('./helpers');
 
-for (const agent of ['codex', 'claude', 'auggie']) test(`MCP → service → installed lreview → ${agent} worker → actual artifacts`, {
+for (const [agent, lenses] of [['codex', false], ['claude', false], ['claude', true], ['auggie', false]]) test(`MCP → service → installed lreview → ${agent} ${lenses ? 'lens ' : ''}worker → actual artifacts`, {
   skip: !process.env.LREVIEW_TEST_EXECUTABLE && 'Set LREVIEW_TEST_EXECUTABLE to an installed lreview; no model usage is consumed.',
 }, async t => {
   const repo = await repository(t);
@@ -30,6 +30,7 @@ for (const agent of ['codex', 'claude', 'auggie']) test(`MCP → service → ins
       if(!process.argv.includes('mcp_servers.lreview_vscode={command="false",enabled=false}')) process.exit(10);
       cp.execFileSync(path.join(path.dirname(process.argv[1]), 'codex-code-mode-host'));
     } else if(agent==='claude' && !process.argv.includes('--disallowedTools=mcp__lreview_vscode__*')) process.exit(11);
+    if(agent==='claude' && process.argv.includes('--agents')!==${lenses}) process.exit(12);
     if (agent === 'auggie') {
       require('assert/strict').deepEqual(process.argv.slice(2, -1),
         ['--print','--mode','json','--show-cost','--no-session','--model','opus','--thinking','medium']);
@@ -52,13 +53,14 @@ for (const agent of ['codex', 'claude', 'auggie']) test(`MCP → service → ins
   const connection = path.join(repo.directory, 'connection.json');
   const bridge = await startBridge(service, connection);
   t.after(async () => { await bridge.dispose(); await service.dispose(); });
-  const run = await bridgeRequest(connection, 'start_review', { commits: [first, second], agent, effort: 'medium' });
+  const run = await bridgeRequest(connection, 'start_review', { commits: [first, second], agent, effort: 'medium', lenses });
   const done = await until(async () => {
     const current = await bridgeRequest(connection, 'get_review', { id: run.id, include_log: true });
     return !['running', 'cancelling'].includes(current.status) && current;
   }, 30000);
   assert.equal(done.status, 'completed', done.log + '\n' + done.error);
   assert.deepEqual(done.results.map(r => r.sha), [first, second]);
+  if (lenses) assert.ok(done.results.every(r => r.lenses === 'opus/medium'));
   assert.ok(done.results.every(r => r.comments.length === 1 && r.message.includes(r.sha)));
   if (agent === 'auggie') {
     assert.equal(done.usage.tokens, 30);

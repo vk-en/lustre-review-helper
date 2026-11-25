@@ -1,4 +1,7 @@
 {
+ "Use five review lenses for this run (about 2× cost)": "今回のレビューで 5 つの観点を使用（費用は約 2 倍）",
+ "Lens review": "5 つの観点によるレビュー",
+ "Lens review requires Claude and Full depth.": "5 つの観点によるレビューには Claude とフルレビューが必要です。",
  "Invalid Gerrit thread ID.": "Gerrit のスレッド ID が無効です。",
  "This Gerrit discussion is unavailable.": "この Gerrit スレッドは利用できません。",
  "Resolved": "解決済み",

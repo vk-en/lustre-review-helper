@@ -111,19 +111,21 @@ function reviewArguments(options, runDirectory) {
   if (agent === 'codex') args.push('--agent-arg=-c', '--agent-arg=mcp_servers.lreview_vscode={command="false",enabled=false}');
   else if (agent === 'claude') args.push('--agent-arg=--disallowedTools=mcp__lreview_vscode__*');
   if (options.effort) args.push('--effort', options.effort);
+  if (options.lenses) args.push('--lenses');
   if (options.promptsDir) args.push('--prompts-dir', options.promptsDir);
   // A re-review after fixing findings looks only at what changed since then.
   if (options.since && !options.gerritPatches?.length) args.push('--since', options.since);
   return [...args, ...(options.gerritPatches?.length ? options.gerritPatches.map(p => p.url) : options.commits)];
 }
 
-// lreview has --post and also reads it from TOML, with no --no-post switch.
-// Use its own Python environment for a snapshot that preserves other options.
-async function manualReviewConfig(binary, file, cwd, env) {
+// lreview reads post and lenses from TOML and has no negative flags for them.
+async function writeReviewConfig(binary, file, cwd, env, lenses) {
   const sibling = path.join(path.dirname(await fs.realpath(binary)), 'python3');
   const python = await fs.access(sibling, fs.constants.X_OK).then(() => sibling,
     () => executable('python3.11').catch(() => 'python3'));
-  const { stdout } = await promisify(execFile)(python, ['-I', path.join(__dirname, 'lreview-config.py')], {
+  const args = ['-I', path.join(__dirname, 'lreview-config.py')];
+  if (lenses) args.push('--lenses');
+  const { stdout } = await promisify(execFile)(python, args, {
     cwd, env, encoding: 'buffer', timeout: 10000, maxBuffer: 4 * 1024 * 1024,
   });
   await fs.writeFile(file, stdout, { mode: 0o600, flag: 'wx' });
@@ -160,6 +162,7 @@ async function collectResults(directory, commits, patches = [], missingStatus = 
     const sha = entry.sha;
     const result = { sha, ...(key !== sha ? {target:key} : {}), subject: entry.subject, status: entry.status,
       severity: entry.severity, error: entry.error, tokens: entry.tokens, costUsd: entry.cost_usd,
+      ...(Object.hasOwn(entry, 'lenses') ? { lenses: typeof entry.lenses === 'string' ? entry.lenses : null } : {}),
       duration: entry.duration_s, message: '', comments: [] };
     if (entry.status === 'findings') {
       Object.assign(result, await readFindings(directory, entry));
@@ -338,6 +341,9 @@ class ReviewService extends EventEmitter {
       if (effort && !model.efforts.includes(effort)) throw new Error(t('This model does not support the selected reasoning effort.'));
       const mode = input.mode || settings.mode || 'full';
       if (!['full', 'light'].includes(mode)) throw new Error('Review mode must be full or light.');
+      if (input.lenses !== undefined && typeof input.lenses !== 'boolean') throw new Error('lenses must be true or false.');
+      const lenses = input.lenses === true;
+      if (lenses && (agent !== 'claude' || mode !== 'full')) throw new Error(t('Lens review requires Claude and Full depth.'));
       if (!Number.isInteger(settings.jobs) || settings.jobs < 1 || settings.jobs > 10) throw new Error('Invalid parallel review count.');
       if (!Number.isInteger(settings.timeout) || settings.timeout < 60 || settings.timeout > 28800) throw new Error('Invalid review timeout.');
       const id = crypto.randomUUID();
@@ -346,7 +352,7 @@ class ReviewService extends EventEmitter {
       await createAgentLauncher(settings[agent], path.join(directory, 'bin'), agent);
       const run = { id, repository: repo.id, repo: repo.path, commits, subjects, tickets: tickets(subjects.map(c => c.subject)),
         ...(patches.length ? {gerritPatches:patches, localCommits} : {}), ...(since ? { since } : {}),
-        agent, model: model.id, modelName: model.name, effort, mode, status: 'running', startedAt: new Date().toISOString(),
+        agent, model: model.id, modelName: model.name, effort, mode, ...(lenses ? { lenses } : {}), status: 'running', startedAt: new Date().toISOString(),
         source: input.source === 'mcp' ? 'mcp' : 'vscode', results: [], log: '',
         directory };
       preparedRun = run;
@@ -398,18 +404,15 @@ class ReviewService extends EventEmitter {
         const configFile = path.join(directory, 'lreview-run.toml');
         try {
           run.exitCode = 0;
+          await writeReviewConfig(settings.lreview, configFile, repo.path, processOptions.env, lenses);
+          processOptions.env.LREVIEW_CONFIG = configFile;
           // lreview's --local applies to the entire invocation. Keep local and
           // Gerrit inputs in consecutive batches sharing its merged manifest,
           // one usage tracker and one cancellable operation in the sidebar.
           for (const batch of batches) {
             if (run.status === 'cancelling') break;
             log(`\nReviewing ${batch.gerritPatches ? `${batch.gerritPatches.length} Gerrit patch(es)` : `${batch.commits.length} local commit(s)`}…\n`);
-            const args = reviewArguments({ ...settings, ...batch, repo: repo.path, agent, model: model.id, effort, mode }, directory);
-            if (batch.gerritPatches) {
-              await manualReviewConfig(settings.lreview, configFile, repo.path, processOptions.env);
-              processOptions.env.LREVIEW_CONFIG = configFile;
-              if (run.status === 'cancelling') break;
-            }
+            const args = reviewArguments({ ...settings, ...batch, repo: repo.path, agent, model: model.id, effort, mode, lenses }, directory);
             const code = await new Promise((resolve, reject) => {
               let spawnError;
               const child = this.spawnProcess(settings.lreview, args, processOptions);
@@ -438,7 +441,7 @@ class ReviewService extends EventEmitter {
           run.error = error.message;
         } finally {
           clearInterval(usageTimer);
-          if (patches.length) await fs.unlink(configFile).catch(() => {});
+          await fs.unlink(configFile).catch(() => {});
           await sampling;
           await sample(true);
           await metrics?.dispose();

@@ -24,6 +24,7 @@ const TOOLS = [
     inputSchema: schema({ repository, agent, commits: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 200, description: 'Commit SHAs or local refs; defaults to ["HEAD"]. Each is reviewed separately.' },
       model: { type: 'string', description: 'Model id from list_models for the chosen agent; defaults to its catalog default.' },
       effort: { type: 'string', description: 'A supported effort from list_models.' }, mode: { type: 'string', enum: ['full', 'light'] },
+      lenses: { type: 'boolean', default: false, description: 'Use five specialist lenses for this run. Requires Claude and full depth and uses additional model capacity.' },
       since: { type: 'string', description: 'Re-review after fixing findings: the commit reviewed before (reviewed_commit from find_reviews or get_selected_review). Only what changed since it is reviewed. Needs exactly one commit.' } }) },
   { name: 'get_review', description: 'Get review state, per-commit findings (file, line, message), the overall assessment and errors. Completed with no findings is distinct from failed or cancelled. ' +
     'While a batch runs, progress.items has each commit\'s state (queued, running, findings, clean, failed), time, findings count and cost. Once finished, reports lists each commit with its gerrit_state. ' +

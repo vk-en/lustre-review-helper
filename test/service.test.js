@@ -119,7 +119,7 @@ test('Gerrit workers override implicit posting while preserving the other lrevie
   process.env.LREVIEW_CONFIG = 'my settings.toml'; // lreview resolves it from the worker cwd.
   const file = path.join(repo.directory, process.env.LREVIEW_CONFIG);
   for (const post of ['post = true\n[run]', '[run]\n"post" = true']) {
-    const source = `prefix = "Rêview 🚀"\n${post}\nstall-timeout = 47\nagent-arg = ["post = true", "kept"]\n`;
+    const source = `prefix = "Rêview 🚀"\nlens_model = "opus"\n${post}\nlenses = true\nlens-effort = "high"\nstall-timeout = 47\nagent-arg = ["post = true", "kept"]\n`;
     await fs.writeFile(file, source);
     const run = await service.start({ gerritPatches: [remotePatch] });
     await until(() => service.get(run.id).status !== 'running');
@@ -127,6 +127,7 @@ test('Gerrit workers override implicit posting while preserving the other lrevie
     const worker = JSON.parse(await fs.readFile(path.join(repo.directory, 'worker-config.json')));
     assert.match(worker.text, /"run" = \{ [^\n]*"post" = false/);
     assert.match(worker.text, /"prefix" = "Rêview 🚀"/);
+    assert.doesNotMatch(worker.text, /lens/, 'lens options require a fresh opt-in');
     assert.match(worker.text, /"stall-timeout" = 47/);
     assert.match(worker.text, /"agent-arg" = \["post = true", "kept"\]/);
     assert.equal(worker.mode, 0o600);
@@ -292,6 +293,8 @@ test('invalid refs/models/efforts and closed repositories never spawn reviewers'
   await assert.rejects(service.start({ model: 'invented-model' }), /catalog/);
   await assert.rejects(service.start({ effort: 'unsupported' }), /reasoning effort/);
   await assert.rejects(service.start({ agent: '../other' }), /Review agent/);
+  await assert.rejects(service.start({ lenses: true }), /requires Claude and Full/);
+  await assert.rejects(service.start({ lenses: 'yes' }), /true or false/);
   assert.equal(service.history().length, 0);
   await assert.rejects(fs.stat(path.join(repo.directory, 'invocation.json')));
 });
@@ -313,11 +316,16 @@ test('Claude backend has an independent catalog, binary, arguments, and saved ag
   await assert.rejects(service.models(false, 'codex'), /not installed/);
   await service.models(false, 'claude');
   await assert.rejects(service.start({agent:'claude',model:'codex-model'}), /catalog/);
-  const run = await service.start({agent:'claude',effort:'max'});
+  await assert.rejects(service.start({agent:'claude',mode:'light',lenses:true}), /requires Claude and Full/);
+  const run = await service.start({agent:'claude',effort:'max',lenses:true,gerritPatches:[remotePatch],commits:['HEAD']});
   await until(() => service.get(run.id).status === 'completed');
   assert.deepEqual(requested, ['codex', 'claude']);
   assert.equal(service.get(run.id).agent, 'claude');
   assert.equal(service.get(run.id).model, 'opus');
+  assert.equal(service.get(run.id).lenses, true);
+  const commands = (await fs.readFile(path.join(repo.directory,'invocations.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);
+  assert.equal(commands.length, 2);
+  assert.ok(commands.every(args => args.includes('--lenses')));
   const invocation = JSON.parse(await fs.readFile(path.join(repo.directory, 'invocation.json')));
   assert.equal(invocation.args[invocation.args.indexOf('--agent')+1], 'claude');
   assert.ok(invocation.args.includes('--agent-arg=--disallowedTools=mcp__lreview_vscode__*'));

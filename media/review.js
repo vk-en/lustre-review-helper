@@ -48,6 +48,7 @@ for (const [id, type] of [['model', 'model'], ['review', 'run'], ['cancel', 'can
   on(id, 'click', () => send(type));
 }
 for (const id of ['effort', 'agent', 'mode']) on(id, 'change', () => send(id, { value: $(id).value }));
+on('lenses', 'change', () => send('lenses', { value: $('lenses').checked }));
 on('gerritReports', 'click', () => send('gerritReports', { id: state.gerritRun?.id }));
 // The diff button opens the remembered scope; its arrow chooses the other one.
 const diffRun = tab => tab === 'gerrit' ? state.gerritRun : state.run;
@@ -620,7 +621,8 @@ function renderStats() {
   const active = ['running', 'cancelling'].includes(run?.status);
   const reviewModel = run ? run.modelName || run.model : state.model?.name || state.model?.id;
   $('reviewConfiguration').textContent = [agentName(run ? run.agent : state.agent), reviewModel,
-    reviewModel ? (run ? run.effort : state.effort) || t('Default') : undefined].filter(Boolean).join(' · ');
+    reviewModel ? (run ? run.effort : state.effort) || t('Default') : undefined,
+    (run ? run.lenses : state.lenses) ? t('Lens review') : undefined].filter(Boolean).join(' · ');
   const usage = run?.usage || {};
   const results = run?.results || [];
   const total = run?.commits?.length || 0;
@@ -1556,7 +1558,8 @@ function renderHistoryStats(run, id = 'historyStats') {
     known(summary.tokens) ? tokenCount(summary.tokens, summary.tokenPartial) : t('Tokens not reported.')));
   line.append(fact('model', 'cpu', `${agentName(run.agent)} · ${run.modelName || run.model || '—'}`, t('Agent and model')));
   line.append(fact('reasoning', 'gauge', run.effort || t('Default'), t('Reasoning')));
-  line.append(fact('depth', 'depth', run.mode === 'light' ? t('Light') : t('Full'), t('Review depth')));
+  line.append(fact('depth', 'depth', run.lenses ? t('Lens review') : run.mode === 'light' ? t('Light') : t('Full'),
+    run.results?.[0]?.lenses || t('Review depth')));
   if (run.signature) quiet.append(fact('quiet', 'sig', run.signature, t('Signature')));
   quiet.append(fact('quiet', 'clock', shortDate(run.startedAt), t('Started')));
   facts.append(line, quiet);
@@ -2178,6 +2181,8 @@ window.addEventListener('message', event => {
   $('effort').disabled = !!state.busy || !state.model?.efforts?.length;
   $('mode').value = state.mode || 'full';
   $('mode').disabled = !!state.busy;
+  $('lensOption').hidden = state.agent !== 'claude' || state.mode !== 'full' || !!state.busy;
+  $('lenses').checked = !!state.lenses;
   if (document.activeElement !== $('commitLimit')) $('commitLimit').value = state.commitLimit ?? 30;
   const connection = state.connections?.find(entry => entry.agent === state.agent);
   const blocked = state.busy ? t('A review is already running or being prepared. Wait for it to finish or cancel it.') :

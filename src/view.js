@@ -253,6 +253,7 @@ function pageHtml(webview, vscode, extensionUri, l10n, language) {
         </div>
         <section id="limits" class="limits" aria-label="Account usage limits" hidden></section>
       </section>
+      <label id="lensOption" class="auto-open-reports" hidden><input id="lenses" type="checkbox"><span>Use five review lenses for this run (about 2× cost)</span></label>
       <label class="auto-open-reports"><input id="autoOpenReports" type="checkbox" checked><span>Open reports in new tabs when finished</span></label>
       <div class="row review-actions">
         <div class="button-tip log-tip"><button id="logs" class="secondary log-button" aria-label="Open review log" aria-describedby="logTip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m6 8 4 4-4 4m7 0h5"/></svg></button><span id="logTip" role="tooltip">Open the review log in the Output panel.</span></div>

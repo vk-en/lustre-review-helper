@@ -18,6 +18,7 @@ function reports(run) {
     const single = run.commits.length === 1;
     const { log, ...metadata } = run;
     return { ...metadata, id: single ? run.id : `${run.id}:${commit.sha}`, runId: run.id, reportSha: commit.sha,
+      ...(result && Object.hasOwn(result, 'lenses') ? { lenses: !!result.lenses } : {}),
       gerritPatch: run.gerritPatches?.find(patch => patch.id === commit.sha),
       commits: [commit.sha], subjects: [commit], results: result ? [result] : [],
       status: single || sharedFailure || !finished(run) ? run.status : result ? ['clean', 'findings'].includes(result.status) ? 'completed' : result.status : run.status,

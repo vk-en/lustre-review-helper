@@ -278,6 +278,11 @@ host. The existing lreview backend depends on POSIX process groups and
   for example **Claude Code · Opus · max**, beside the animated robot. While a
   review runs, this identifies that run's settings, including MCP overrides.
   The button is labeled **Start review**.
+  With Claude and Full depth, **Use five review lenses for this run** asks
+  five specialists to check concurrency, lifecycle, data, semantics and build
+  issues. Claude verifies their findings. This typically costs about twice a
+  regular run. The checkbox resets after launch. MCP accepts the same choice
+  as `lenses: true` on `start_review`.
   A square log icon, Start review and (during reviews) Cancel share a row
   below the statistics card, in that order.
   **Open reports in new tabs when finished**, between the card and buttons,

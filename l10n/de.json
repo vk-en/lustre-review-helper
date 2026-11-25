@@ -1,4 +1,7 @@
 {
+ "Use five review lenses for this run (about 2× cost)": "Fünf Prüfperspektiven für diesen Lauf verwenden (etwa doppelte Kosten)",
+ "Lens review": "Prüfung mit fünf Perspektiven",
+ "Lens review requires Claude and Full depth.": "Die Prüfung mit fünf Perspektiven erfordert Claude und die vollständige Prüftiefe.",
  "Invalid Gerrit thread ID.": "Ungültige Gerrit-Diskussions-ID.",
  "This Gerrit discussion is unavailable.": "Diese Gerrit-Diskussion ist nicht verfügbar.",
  "Resolved": "Erledigt",
