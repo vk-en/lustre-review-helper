@@ -6,6 +6,27 @@
   the updated `lreview` adapter. Reviews show token usage and billed USD or
   credits directly from the worker log. Auggie 0.x retains its account and
   session integration with the matching older adapter.
+- On the **Review** tab, select **Use five review lenses for this run** for
+  a Full review with Claude. The checkbox resets after launch. MCP clients
+  can enable the same checks with `lenses: true` on `start_review`.
+- From a Gerrit report, choose **Check current patchset for conflicts** to
+  check both landing orders, spot duplicate test numbers or `fail_loc` values,
+  and see which functions both patches edit. **Show conflict hunks** opens
+  the conflicting lines for the selected pair of patches.
+- Choose **Open Gerrit discussion** in a diff thread to read the latest
+  replies, see whether the thread is resolved, and follow its link to Gerrit.
+- **Start review** keeps Gerrit publication manual even when the `lreview`
+  configuration sets `post = true`.
+- In Gerrit CLI draft mode, **Save drafts in Gerrit** records the review as
+  **Drafts saved** across restarts and prevents duplicate submissions. Open
+  the change in Gerrit to publish the drafts.
+- **Ready for landing** follows the Gerrit dashboard's vote threshold, CI
+  status and blockers. Eligible backports can qualify with one positive vote.
+- Review history and MCP count only unresolved findings. Informational
+  `UPSTREAM` notes appear as resolved in the diff and are available as
+  `notes` in MCP review lookups.
+- Add Gerrit changes and look up reviews through MCP using project links
+  that omit `/c/`. Adding a link to a specific patchset selects that patchset.
 
 ## 0.1.0
 
