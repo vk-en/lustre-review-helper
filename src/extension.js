@@ -314,7 +314,7 @@ async function activate(context) {
     const account = projectInfo?.project ? queue.get(projectInfo.project).account : undefined;
     const mark = votes => (votes || []).map(vote => ({ ...vote, ...(account && vote.name === account ? { me: true } : {}) }));
     const ci = (item, details) => item && (!details || item.ps >= details.ps) ?
-      { build: item.build, tests: item.tests, failedTests: item.failedTests, votes: item.votes, replyAt: item.replyAt } :
+      { build: item.build, tests: item.tests, failedTests: item.failedTests, votes: item.votes, voteThreshold: item.voteThreshold, replyAt: item.replyAt } :
       details ? { build: details.build, tests: details.tests, votes: mark(details.votes) } : {};
     if (report.gerritPatch) {
       const patch = report.gerritPatch, details = changeInfo.get(patch.number);

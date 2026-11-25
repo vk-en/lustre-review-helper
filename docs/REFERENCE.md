@@ -203,11 +203,12 @@ host. The existing lreview backend depends on POSIX process groups and
   running build or tests, ready for landing and a −1 from another reviewer.
   By default unfinished CI is hidden in both, and your +1 in In progress.
   **Reset** restores these defaults; **Show all** under the list clears the
-  filter. Ready for landing means build and tests passed, no negative vote and
-  two positive votes from people other than the owner (yours counts). The tab
+  filter. Ready for landing means CI passed, the change meets its Code-Review
+  threshold and the dashboard lists no blockers. The default threshold is two
+  reviewers for a native patch and one for a backport. The tab
   counters show the changes listed in Waiting Review and the changes updated
   since your review in In progress. Code-Review votes on the current patchset
-  show as slots, at least two since landing needs two +1: grey while empty,
+  show as slots reflecting the review threshold, grey while empty,
   green for a positive vote, red for a negative one, yours included; plus
   signs in List and Cards, dots one above the other in Groups, next to the
   build and tests mark.

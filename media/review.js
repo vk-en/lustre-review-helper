@@ -912,20 +912,19 @@ function othersChip(item, full) {
   node.setAttribute('aria-label', reviews.map(review => othersText(item, review)).join('. '));
   return node;
 }
-// Code-Review votes on the current patchset as slots: grey while empty, green
-// for a positive vote, red for a negative one. Landing needs two +1, so there
-// are always at least two slots.
+// Empty slots show how many votes the dashboard expects for this change.
 function voteSlots(item, style) {
   const votes = [...item.votes].sort((a, b) => b.value - a.value);
+  const threshold = item.voteThreshold ?? 2;
   const node = element('span', undefined, `qvotes ${style}`);
-  for (let index = 0; index < Math.max(2, votes.length); index++) {
+  for (let index = 0; index < Math.max(Math.min(threshold, 30), votes.length); index++) {
     const vote = votes[index], kind = !vote ? 'empty' : vote.value > 0 ? 'plus' : 'minus';
     if (style === 'dots') { node.append(element('i', undefined, kind)); continue; }
     const slot = element('span', undefined, `qvote ${kind}`);
     slot.append(qicon(kind === 'minus' ? 'minus' : 'plus'));
     node.append(slot);
   }
-  const needed = Math.max(0, 2 - votes.filter(vote => vote.value > 0).length);
+  const needed = Math.max(0, threshold - votes.filter(vote => vote.value > 0).length);
   node.setAttribute('role', 'img');
   node.setAttribute('aria-label', `Code-Review: ${votes.length ? votes.map(vote => `${voteWord(vote.value)} ${vote.me ? t('you') : vote.name}`).join(', ') : t('no votes')}${needed ? `, ${tn(needed, '{n} more +1 needed', '{n} more +1 needed')}` : ''}`);
   return node;
@@ -1498,7 +1497,7 @@ function renderHistoryStats(run, id = 'historyStats') {
     const gerrit = row('Gerrit');
     gerrit.append(ciStep('build', live.build));
     if (live.build === 'passed') gerrit.append(ciStep('tests', live.tests, live.tests === 'failed' && live.failedTests?.length ? ` · ${live.failedTests[0]}` : ''));
-    gerrit.append(voteSlots({ votes: live.votes || [] }, 'plus'));
+    gerrit.append(voteSlots({ votes: live.votes || [], voteThreshold: live.voteThreshold }, 'plus'));
     rows.append(gerrit);
   } else if (live.loading && (patch || live.link?.number)) {
     const gerrit = row('Gerrit'); gerrit.append(element('span', t('Checking Gerrit…'), 'qtext')); rows.append(gerrit);

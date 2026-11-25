@@ -14,8 +14,7 @@ const { t } = require('./l10n');
 const ORIGIN = 'https://review.whamcloud.com';
 const PROJECT = /^[\w.-]+(?:\/[\w.-]+)*$/;
 const validProject = name => typeof name === 'string' && name.length <= 200 && PROJECT.test(name) && !name.split('/').some(part => part === '.' || part === '..');
-// Ready for landing: CI passed, no negative vote and two positive votes from
-// people other than the owner.
+// Default for a native patch when an older snapshot omits its review threshold.
 const READY_VOTES = 2;
 const PROJECT_LIMIT = 20;
 // Refreshed by itself this often, by whichever window of the project gets there first.
@@ -129,12 +128,14 @@ function change(record, me, project) {
   const reviewed = myVote !== 0 || !!prior || !!mine;
   const myPs = !reviewed ? undefined : myVote !== 0 ? ps : Math.min(ps, Math.max(prior?.ps || 0, atMine)) || ps;
   const negative = review.neg === true || votes.some(vote => vote.value < 0);
+  const voteThreshold = integer(review.threshold, 0) ?? (record.backport === true ? 1 : READY_VOTES);
+  const passed = typeof review.pass === 'boolean' ? review.pass : votes.filter(vote => vote.value > 0).length >= voteThreshold;
   const ci = ciState(record);
   return { number, ps, subject: text(record.subject) || `Change ${number}`, owner: text(record.owner, 200), branch: text(record.branch, 200),
     updated: gerritTime(record.updated), psCreated: gerritTime(record.ps_created), reviewed, myVote, ...(myPs ? { myPs } : {}),
     ...(prior ? { prior } : {}), ...(mine ? { lastMine: mine } : {}), ...ci, votes,
     unresolved: integer(record.unresolved, 0) || 0, plusOther: others.some(vote => vote.value > 0), negOther: others.some(vote => vote.value < 0),
-    ready: ci.ci === 'passed' && !negative && votes.filter(vote => vote.value > 0).length >= READY_VOTES };
+    voteThreshold, ready: ci.ci === 'passed' && passed && !negative && !record.blockers?.length };
 }
 
 // AI reviews in a comment timeline: comments signed as lreview signs them,
@@ -216,7 +217,8 @@ function restore(item) {
     myVote: Number.isSafeInteger(item.myVote) ? Math.max(-2, Math.min(2, item.myVote)) : 0, ...(integer(item.myPs) ? { myPs: item.myPs } : {}),
     ...(prior ? { prior } : {}), ci: item.ci, build: STEPS.includes(item.build) ? item.build : 'none', tests: STEPS.includes(item.tests) ? item.tests : 'none',
     failedTests: (Array.isArray(item.failedTests) ? item.failedTests : []).map(name => text(name, 120)).filter(Boolean).slice(0, 5),
-    votes, unresolved: integer(item.unresolved, 0) || 0, kind: item.kind, ...(aiOthers.length ? { aiOthers } : {}), ...flags };
+    votes, voteThreshold: integer(item.voteThreshold, 0) ?? READY_VOTES,
+    unresolved: integer(item.unresolved, 0) || 0, kind: item.kind, ...(aiOthers.length ? { aiOthers } : {}), ...flags };
 }
 
 function restoreProject(entry) {

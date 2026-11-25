@@ -37,7 +37,7 @@ const TOOLS = [
   { name: 'get_selected_review', description: 'Get the review chosen in Reports & History in VS Code, with its findings, report file and gerrit_state. Returns null when nothing is chosen; ask the user to choose one. ' + GERRIT_STATE, inputSchema: schema({}) },
   { name: 'get_gerrit_queue', description: 'The Gerrit changes of this repository\'s project where the Gerrit account is a reviewer, as the Gerrit patches panel shows them. ' +
     'waiting_review: not reviewed or voted on yet. in_progress: already reviewed, with state new_patchset (uploaded since my review), owner_replied, waiting_for_author or my_plus_one. ' +
-    'Each change has its CI (build, tests, failed tests), Code-Review votes, ready_for_landing (CI passed, no negative vote, two positive votes besides the owner), and this extension\'s AI review of the current patchset (ready or published) or other people\'s. ' +
+    'Each change has its CI (build, tests, failed tests), Code-Review votes, ready_for_landing (CI and the change’s review threshold passed with no blockers), and this extension\'s AI review of the current patchset (ready or published) or other people\'s. ' +
     'Reads the last refresh, shared by all VS Code windows; refresh reads Gerrit again, which takes a few seconds. Does not change anything on Gerrit.',
     inputSchema: schema({ repository, refresh: { type: 'boolean', default: false, description: 'Read Gerrit again instead of the last refresh (refreshed_at).' } }) },
   { name: 'list_reviews', description: 'List recent review runs in an open repository, including runs started from the sidebar.', inputSchema: schema({ repository }) },

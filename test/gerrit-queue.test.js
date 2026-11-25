@@ -66,6 +66,20 @@ test('changes split by whether I already reviewed them, with CI, votes and ready
   assert.throws(() => classify({ ...snapshot(), projects: ['other/project'] }, PROJECT), /another project/);
 });
 
+test('landing readiness follows the dashboard gate, including backports and outstanding blockers', () => {
+  const port = { threshold: 1, pass: true, humans: [vote(5, 1)] };
+  const records = [
+    record(1, { backport: true, review: port }),
+    record(2, { review: { ...port, pass: false } }),
+    record(3, { review: port, blockers: [{ kind: 'rebase' }] }),
+    record(4, { review: port, gate: 'PENDING' }),
+    record(5, { review: { threshold: 3, humans: [vote(5, 1), vote(6, 1)] } }),
+  ];
+  const { waiting } = classify({ ...snapshot(), reviews: { requested: records } }, PROJECT);
+  assert.deepEqual(waiting.map(item => [item.voteThreshold, item.ready]),
+    [[1, true], [1, false], [1, false], [1, false], [3, false]]);
+});
+
 test('owner replies are the owner’s comments after my last message', () => {
   const timeline = { timeline: [
     { author: 'Patch Owner', updated: '2026-10-17 07:00:00.000000000' },
