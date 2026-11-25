@@ -11,10 +11,10 @@ const info = { change_number: 64086, subject: 'LU-12345 lod: fix allocation', ow
   patchsets: [{number:1},{number:2},{number:3}], other: 'not needed in UI' };
 
 test('Gerrit patch URLs require the exact HTTPS host and a change number', () => {
-  for (const route of ['/64086', '/c/64086/', '/c/fs/lustre-release/+/64086', '/#/c/64086/']) {
+  for (const route of ['/64086', '/c/64086/', '/c/fs/lustre-release/+/64086', '/fs/lustre-release/+/64086', '/#/c/64086/']) {
     assert.deepEqual(changeUrl(origin+route), { number:64086, patchset:undefined, url:origin+'/64086' });
   }
-  for (const route of ['/64086/2', '/c/fs/lustre-release/+/64086/2/file.c#12', '/#/c/64086/2']) {
+  for (const route of ['/64086/2', '/c/fs/lustre-release/+/64086/2/file.c#12', '/fs/lustre-release/+/64086/2/file.c#12', '/#/c/64086/2']) {
     assert.equal(changeUrl(origin+route).patchset, 2);
   }
   for (const input of ['', null, 64086, origin, origin+'/', 'http://review.whamcloud.com/64086',

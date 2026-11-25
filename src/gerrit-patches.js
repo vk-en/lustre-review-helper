@@ -12,9 +12,9 @@ function changeUrl(value) {
   let url;
   try { url = new URL(value.trim()); } catch { throw urlError(); }
   if (url.origin !== ORIGIN || url.username || url.password) throw urlError();
-  // Current /c/project/+/number, short /number and legacy /#/c/number links.
+  // Project links may omit /c/. Short /number and legacy /#/c/number links also occur.
   const route = url.pathname === '/' && url.hash.startsWith('#/c/') ? url.hash.slice(1) : url.pathname;
-  const match = route.match(/^\/(?:c\/(?:(?:[^/]+\/)+\+\/)?)?([1-9]\d*)(?:\/([1-9]\d*)(?:\/.*)?)?\/?$/);
+  const match = route.match(/^\/(?:c\/|(?:[^/]+\/)+\+\/)?([1-9]\d*)(?:\/([1-9]\d*)(?:\/.*)?)?\/?$/);
   const number = Number(match?.[1]), patchset = match?.[2] ? Number(match[2]) : undefined;
   if (!Number.isSafeInteger(number) || number <= 0 || (patchset !== undefined && !Number.isSafeInteger(patchset))) throw urlError();
   return { number, patchset, url: `${ORIGIN}/${number}${patchset ? `/${patchset}` : ''}` };

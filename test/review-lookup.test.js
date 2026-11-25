@@ -48,7 +48,8 @@ test('agents find the review of a commit, of its amended version and of the loca
   runs.set(patchRun, { id: patchRun, repository: 'repo', status: 'completed', startedAt: '2026-10-18T10:00:00Z', agent: 'auggie', model: 'gpt', mode: 'full',
     commits: ['gerrit:66889:8'], gerritPatches: [{ id: 'gerrit:66889:8', number: 66889, patchset: 8, project: 'ex/lustre-release' }],
     results: [{ sha: 'c'.repeat(40), target: 'gerrit:66889:8', subject: 'LU-19712 utils: pin_info', status: 'findings', message: 'One.', comments: [finding] }] });
-  for (const change of ['66889', 'https://review.whamcloud.com/c/ex/lustre-release/+/66889/8']) {
+  for (const change of ['66889', 'https://review.whamcloud.com/c/ex/lustre-release/+/66889/8',
+    'https://review.whamcloud.com/ex/lustre-release/+/66889/8']) {
     const found = await findReviews(service, { change });
     assert.equal(found.change, 66889);
     assert.deepEqual(found.reviews.map(review => [review.review, review.match, review.gerrit.change, review.findings.length]), [[patchRun, 'change', 66889, 1]]);

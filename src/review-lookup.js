@@ -8,7 +8,7 @@ const { git, resolveCommit, listCommits, mergedCommits } = require('./git');
 const SHA = /^[a-f0-9]{40,64}$/;
 const ACTIVE = new Set(['running', 'cancelling']);
 // A Gerrit change: its number, or its review.whamcloud.com URL in any form.
-const CHANGE_URL = /^https:\/\/review\.whamcloud\.com\/(?:c\/[^\s?#]+\/\+\/|#\/c\/)?(\d+)(?:[/?#][^\s]*)?$/;
+const CHANGE_URL = /^https:\/\/review\.whamcloud\.com\/(?:[^\s?#]+\/\+\/|(?:#\/)?c\/)?(\d+)(?:[/?#][^\s]*)?$/;
 function changeNumber(value) {
   const text = typeof value === 'string' ? value.trim() : '';
   const number = Number(/^\d+$/.test(text) ? text : CHANGE_URL.exec(text)?.[1]);
