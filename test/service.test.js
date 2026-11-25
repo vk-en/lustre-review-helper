@@ -3,7 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { ReviewService, artifact } = require('../src/service');
+const { ReviewService, artifact, collectResults } = require('../src/service');
+const { reviewDetails } = require('../src/review-lookup');
 const { reports, summarize } = require('../src/history');
 const { repository, script, temporary, until } = require('./helpers');
 
@@ -55,6 +56,33 @@ async function setup(t, scenario = 'findings') {
   t.after(() => service.dispose());
   return { repo, first, second, service };
 }
+
+test('upstream notes stay in the report and only actionable findings count, including in saved runs', async t => {
+  const root = await temporary(t), id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', sha = 'b'.repeat(40);
+  const directory = path.join(root, id, 'artifacts');
+  await fs.mkdir(directory, { recursive: true });
+  const comments = [{ message: '(defect) UPSTREAM: inherited', unresolved: false },
+    { message: '(defect) UPSTREAM-BLOCKER: crash' }, { message: '(minor) BACKPORT: missed a change' }];
+  await fs.writeFile(path.join(directory, 'summary.json'), JSON.stringify({ [sha]: { sha, local: true, status: 'findings', json: 'review.json' } }));
+  await fs.writeFile(path.join(directory, 'review.json'), JSON.stringify({ comments: { 'file.c': comments } }));
+  const results = await collectResults(directory, [sha]);
+  assert.deepEqual(results[0].comments.map(c => c.unresolved), [false, true, true]);
+  const run = { id, commits: [sha], results, status: 'completed' };
+  assert.equal(summarize(run).findings.defect, 1);
+  const details = await reviewDetails({ reportFiles: async () => [] }, run, reports(run)[0]);
+  assert.equal(details.findings_count, 2);
+  assert.deepEqual(details.findings.map(c => c.message), comments.slice(1).map(c => c.message));
+  assert.equal(details.notes[0].message, comments[0].message);
+
+  for (const c of results[0].comments) delete c.unresolved;
+  await fs.writeFile(path.join(root, id, 'run.json'), JSON.stringify(run));
+  const restored = new ReviewService({ storage: root });
+  await restored.initialize();
+  assert.deepEqual(restored.runs.get(id).results[0].comments.map(c => c.unresolved), [false, true, true]);
+  await fs.unlink(path.join(directory, 'review.json'));
+  await restored.initialize();
+  assert.deepEqual(restored.runs.get(id).results[0].comments.map(c => c.unresolved), [false, true, true]);
+});
 
 test('selected commits are pinned, run with real argv, and returned to both clients', async t => {
   const { repo, first, second, service } = await setup(t);

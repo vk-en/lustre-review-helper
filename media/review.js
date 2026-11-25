@@ -689,7 +689,8 @@ function batchItems(run) {
     const counts = result && run.summary?.commits?.find(item => item.sha === key)?.findings;
     const kinds = counts ? FINDING_ORDER.filter(kind => counts[kind] > 0).map(kind => [kind, counts[kind]]) :
       progress.findings > 0 ? [[/high|critical/i.test(progress.severity || '') ? 'defect' : 'minor', progress.findings]] : [];
-    return { key, state, kinds, label: patch ? `#${patch.number}` : key.slice(0, 7), gerrit: !!patch,
+    return { key, state: state === 'findings' && counts?.total === 0 ? 'clean' : state, kinds,
+      label: patch ? `#${patch.number}` : key.slice(0, 7), gerrit: !!patch,
       subject: run.subjects?.find(item => item.sha === key)?.subject || patch?.subject || '',
       duration: known(result?.duration) ? result.duration : progress.duration, startedAt: progress.startedAt,
       costUsd: known(result?.costUsd) ? result.costUsd : progress.costUsd };
@@ -1426,6 +1427,7 @@ const findingKind = message => String(message || '').match(/^\s*(?:\*\*)?\((defe
 function findingFiles(run) {
   const files = new Map();
   for (const comment of run.results?.[0]?.comments || []) {
+    if (comment.unresolved === false) continue;
     const file = commitFile(comment.file);
     if (!files.has(file)) files.set(file, []);
     files.get(file).push(findingKind(comment.message));

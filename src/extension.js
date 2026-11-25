@@ -442,7 +442,8 @@ async function activate(context) {
   const knownNumber = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   const historyRow = report => {
     const result = report.results?.[0], counts = findingCounts(report.results || [], 1) || {}, patch = report.gerritPatch;
-    const row = { id: report.id, runId: report.runId, startedAt: report.startedAt, status: report.status, ...(result ? { result: result.status } : {}),
+    const row = { id: report.id, runId: report.runId, startedAt: report.startedAt, status: report.status,
+      ...(result ? { result: result.status === 'findings' && counts.total === 0 ? 'clean' : result.status } : {}),
       subject: report.subjects?.[0]?.subject || '', tickets: report.tickets || [], hasReport: hasReport(report), isNew: isNew(report),
       agent: report.agent, model: report.modelName || report.model, effort: report.effort,
       kinds: Object.fromEntries(FINDING_KEYS.filter(key => counts[key] > 0).map(key => [key, counts[key]])),
@@ -823,7 +824,7 @@ async function activate(context) {
     if (live.kind === 'gerrit') {
       // Outdated as General information shows it: a newer patchset touches a file with findings.
       const message = file => ['/COMMIT_MSG', 'COMMIT_MSG', 'COMMIT_MESSAGE'].includes(file) ? '/COMMIT_MSG' : file;
-      const patch = report.gerritPatch, files = new Set((result.comments || []).map(comment => message(comment.file)));
+      const patch = report.gerritPatch, files = new Set((result.comments || []).filter(comment => comment.unresolved !== false).map(comment => message(comment.file)));
       const changed = live.changed || [], touched = changed.filter(file => files.has(message(file)));
       const newer = live.current > live.reviewed, others = otherAiReviews(patch);
       return { change: live.number, url: changeUrl(patch.project, live.number), reviewed_patchset: live.reviewed,

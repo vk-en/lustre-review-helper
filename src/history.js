@@ -33,6 +33,7 @@ function findings(results, expected) {
   const counts = { total: 0, defect: 0, minor: 0, suggestion: 0, typo: 0, style: 0, nit: 0, other: 0, commitMessage: 0,
     partial: complete.length < expected };
   for (const result of complete) for (const comment of result.comments || []) {
+    if (comment.unresolved === false) continue;
     // Use the protocol's explicit leading category, never infer severity from prose.
     const category = String(comment.message || '').match(/^\s*(?:\*\*)?\((defect|minor|suggestion|typo|style|nit)\)/i)?.[1]?.toLowerCase() || 'other';
     counts.total++; counts[category]++;

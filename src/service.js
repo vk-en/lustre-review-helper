@@ -116,6 +116,23 @@ function reviewArguments(options, runDirectory) {
   return [...args, ...(options.gerritPatches?.length ? options.gerritPatches.map(p => p.url) : options.commits)];
 }
 
+async function readFindings(directory, entry) {
+  const report = await artifact(directory, entry.json);
+  if (!report.comments || typeof report.comments !== 'object' || Array.isArray(report.comments)) {
+    throw new Error(`Invalid findings for ${entry.sha.slice(0, 12)}.`);
+  }
+  const comments = [];
+  for (const [file, items] of Object.entries(report.comments)) {
+    if (!Array.isArray(items)) throw new Error('Invalid inline comments.');
+    for (const item of items) {
+      if (typeof item.message !== 'string') throw new Error('Invalid finding message.');
+      comments.push({ file, line: Number.isInteger(item.line) && item.line > 0 ? item.line : 1,
+        message: item.message, unresolved: item.unresolved !== false });
+    }
+  }
+  return { message: typeof report.message === 'string' ? report.message : '', comments };
+}
+
 async function collectResults(directory, commits, patches = [], missingStatus = 'failed') {
   const summary = await readJson(path.join(directory, 'summary.json'));
   if (!summary || typeof summary !== 'object' || Array.isArray(summary)) throw new Error('Invalid lreview summary.');
@@ -132,19 +149,7 @@ async function collectResults(directory, commits, patches = [], missingStatus = 
       severity: entry.severity, error: entry.error, tokens: entry.tokens, costUsd: entry.cost_usd,
       duration: entry.duration_s, message: '', comments: [] };
     if (entry.status === 'findings') {
-      const report = await artifact(directory, entry.json);
-      result.message = typeof report.message === 'string' ? report.message : '';
-      if (!report.comments || typeof report.comments !== 'object' || Array.isArray(report.comments)) {
-        throw new Error(`Invalid findings for ${sha.slice(0, 12)}.`);
-      }
-      for (const [file, comments] of Object.entries(report.comments)) {
-        if (!Array.isArray(comments)) throw new Error('Invalid inline comments.');
-        for (const comment of comments) {
-          if (typeof comment.message !== 'string') throw new Error('Invalid finding message.');
-          result.comments.push({ file, line: Number.isInteger(comment.line) && comment.line > 0 ? comment.line : 1,
-            message: comment.message });
-        }
-      }
+      Object.assign(result, await readFindings(directory, entry));
     } else if (entry.status !== 'clean') {
       result.diagnostic = await failureDetails(directory, entry.log);
     }
@@ -198,6 +203,23 @@ class ReviewService extends EventEmitter {
         if (run.status === 'failed') {
           try { run.results = await collectResults(path.join(this.storage, name, 'artifacts'), run.commits, run.gerritPatches); }
           catch { /* Keep saved results if artifacts were removed or are incomplete. */ }
+        }
+        // Older run.json files dropped unresolved. Recover it from the original
+        // report when available, including when only part of a batch survives.
+        const legacy = (run.results || []).filter(result => result.comments?.some(comment => comment.unresolved === undefined));
+        if (legacy.length) {
+          const directory = path.join(this.storage, name, 'artifacts');
+          const summary = await artifact(directory, 'summary.json').catch(() => ({}));
+          for (const result of legacy) {
+            const entry = summaryEntry(summary, resultKey(result), run.gerritPatches);
+            if (entry && entry.sha === result.sha && entry.status === 'findings') {
+              try { result.comments = (await readFindings(directory, entry)).comments; continue; }
+              catch { /* Keep the saved comments if the original report is gone. */ }
+            }
+            for (const comment of result.comments) {
+              comment.unresolved ??= !/^\s*(?:\*\*)?\(\w+\)(?:\*\*)?\s+(?:\*\*)?UPSTREAM:/i.test(comment.message);
+            }
+          }
         }
         if (run.agent === 'auggie' && !ACTIVE.has(run.status) && run.usage?.tokens == null) {
           try {

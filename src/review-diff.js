@@ -174,6 +174,7 @@ class ReviewDiff {
         body: new vscode.MarkdownString(prefix ? `${prefix}\n\n${comment.message}` : comment.message), mode: vscode.CommentMode.Preview, author: { name: author } }]);
       const category = String(comment.message).match(CATEGORY)?.[1]?.toLowerCase();
       if (category) thread.label = { defect: t('Defect'), minor: t('Minor'), suggestion: t('Suggestion'), typo: t('Typo'), style: t('Style'), nit: t('Nit') }[category];
+      if (comment.unresolved === false) thread.state = vscode.CommentThreadState.Resolved;
       thread.canReply = false;
       thread.contextValue = 'lustreReviewFinding';
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;

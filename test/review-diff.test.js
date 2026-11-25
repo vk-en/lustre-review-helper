@@ -34,7 +34,7 @@ function fakeVscode() {
     Uri: { from: parts => ({ ...parts, toString: () => `${parts.scheme}:${parts.path}?${parts.query}` }) },
     Range: class { constructor(startLine, startCharacter, endLine, endCharacter) { Object.assign(this, { startLine, startCharacter, endLine, endCharacter }); } },
     MarkdownString: class { constructor(value) { this.value = value; } },
-    CommentMode: { Preview: 1 }, CommentThreadCollapsibleState: { Expanded: 1 },
+    CommentMode: { Preview: 1 }, CommentThreadCollapsibleState: { Expanded: 1 }, CommentThreadState: { Resolved: 1 },
     comments: { createCommentController: (id, label) => ({ id, label, dispose() { this.disposed = true; },
       createCommentThread: (uri, range, comments) => { const thread = { uri, range, comments, dispose() { this.disposed = true; } }; threads.push(thread); return thread; } }) },
     commands: { executeCommand: async (...args) => commands.push(args) },
@@ -46,7 +46,7 @@ const comments = [
   { file: '/COMMIT_MSG', line: 11, message: '(minor) Which defect does this fix?' },
   { file: 'kept.c', line: 2, message: '**(defect)** Check this value.' },
   { file: 'gone.c', line: 1, message: '(suggestion) Why remove this?' },
-  { file: 'context.c', line: 1, message: 'Context finding.' },
+  { file: 'context.c', line: 1, message: 'Context finding.', unresolved: false },
   { file: 'missing.c', line: 9, message: '(nit) Elsewhere.' },
   { file: 'long.c', line: 7, message: '(style) Near the change.' },
   { file: 'long.c', line: 40, message: '(style) Now unused.' },
@@ -100,6 +100,7 @@ test('review diffs place each finding where it is visible, never drop one and re
   assert.equal(body(6), '**Line 40** · unchanged code\n\n```c\n38  line 38\n39  line 39\n40  line 40\n41  line 41\n42  line 42\n```\n\n(style) Now unused.',
     'a finding in hidden unchanged code moves to the nearest visible line and quotes its code');
   assert.equal(threads[1].comments[0].author.name, '[Lustre Bot]');
+  assert.equal(threads[3].state, vscode.CommentThreadState.Resolved);
   assert.ok(threads.every(thread => thread.canReply === false));
   const content = (side, file) => diff.provideTextDocumentContent(diff.uri('run:1', side, file));
   assert.equal(await content('head', 'kept.c'), 'one\nTWO\nthree\n');

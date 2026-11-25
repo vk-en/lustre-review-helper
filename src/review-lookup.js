@@ -34,13 +34,17 @@ async function localSeries(repo) {
 
 function entry(run, result, match, withFindings) {
   const patch = run.gerritPatches?.find(item => item.id === (result.target || result.sha));
+  const comments = result.comments || [];
+  const findings = comments.filter(comment => comment.unresolved !== false);
+  const location = ({ file, line, message }) => ({ file, line, message });
   return { review: run.id, run_status: run.status, status: result.status, match, reviewed_commit: result.sha,
     subject: result.subject || run.subjects?.find(item => item.sha === (result.target || result.sha))?.subject,
     started_at: run.startedAt, finished_at: run.finishedAt, agent: run.agent, model: run.modelName || run.model,
     effort: run.effort || 'default', mode: run.mode, ...(run.since ? { since: run.since } : {}),
     ...(patch ? { gerrit: { change: patch.number, patchset: patch.patchset, project: patch.project } } : {}),
-    findings_count: (result.comments || []).length,
-    ...(withFindings ? { assessment: result.message || '', findings: (result.comments || []).map(({ file, line, message }) => ({ file, line, message })) } : {}),
+    findings_count: findings.length,
+    ...(withFindings ? { assessment: result.message || '', findings: findings.map(location),
+      ...(comments.length > findings.length ? { notes: comments.filter(comment => comment.unresolved === false).map(location) } : {}) } : {}),
     ...(result.error ? { error: result.error } : {}) };
 }
 
